@@ -54,7 +54,7 @@ function ReferenceInput({ value, onChange, label }: Props) {
     const detail = value.kind === 'upload' ? value.name : value.kind === 'character' ? 'Character' : 'From your results'
     return (
       <div className="ref-preview">
-        <img src={src} alt="Reference" />
+        <img src={src} alt={value.kind === 'character' ? `Photo of ${value.name}` : 'Your reference photo'} />
         <div className="ref-meta">
           <span>{value.kind === 'character' ? value.name : label}</span>
           <small>{detail}</small>

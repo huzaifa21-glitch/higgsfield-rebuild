@@ -7,6 +7,8 @@ export function CharactersProvider({ children }: { children: ReactNode }) {
   const [characters, setCharacters] = useState<Character[]>([])
   const [limit, setLimit] = useState(3)
   const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -18,11 +20,22 @@ export function CharactersProvider({ children }: { children: ReactNode }) {
         setCharacters(data.characters)
         setLimit(data.limit)
         setLoaded(true)
+        setError(null)
       })
-      .catch(() => !cancelled && setLoaded(true))
+      .catch(() => {
+        if (cancelled) return
+        setError("We couldn't load your characters. Check your connection and try again.")
+        setLoaded(true)
+      })
     return () => {
       cancelled = true
     }
+  }, [attempt])
+
+  const reload = useCallback(() => {
+    setError(null)
+    setLoaded(false)
+    setAttempt((a) => a + 1)
   }, [])
 
   const create = useCallback(async (name: string, image: string) => {
@@ -43,6 +56,9 @@ export function CharactersProvider({ children }: { children: ReactNode }) {
     return ok
   }, [])
 
-  const value = useMemo(() => ({ characters, limit, loaded, create, rename, remove }), [characters, limit, loaded, create, rename, remove])
+  const value = useMemo(
+    () => ({ characters, limit, loaded, error, reload, create, rename, remove }),
+    [characters, limit, loaded, error, reload, create, rename, remove],
+  )
   return <CharactersContext.Provider value={value}>{children}</CharactersContext.Provider>
 }

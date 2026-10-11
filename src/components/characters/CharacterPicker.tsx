@@ -25,7 +25,7 @@ function CharacterPicker({ characters, selectedId, onPick, label = 'Use a charac
             onClick={() => onPick(c)}
             title={c.name}
           >
-            <img src={c.image_url} alt="" />
+            <img src={c.image_url} alt="" loading="lazy" decoding="async" />
             <span>{c.name}</span>
           </button>
         ))}

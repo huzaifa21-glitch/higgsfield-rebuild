@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { Character } from '../../lib/api.ts'
 import { useCharacters } from '../../lib/charactersContext.ts'
+import { useToast } from '../../lib/toastContext.ts'
 import ReferenceInput, { type Reference } from '../create/ReferenceInput.tsx'
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
 // Upload a face (resized to 512px in the browser), name it, save. Free.
 function CharacterCreator({ onCreated, onCancel, uploadLabel = 'Upload a face photo' }: Props) {
   const { create } = useCharacters()
+  const toast = useToast()
   const [photo, setPhoto] = useState<Reference | null>(null)
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
@@ -24,8 +26,10 @@ function CharacterCreator({ onCreated, onCancel, uploadLabel = 'Upload a face ph
     setError(null)
     const result = await create(name.trim(), photo.dataUrl)
     setSaving(false)
-    if (result.ok) onCreated(result.character)
-    else setError(result.error)
+    if (result.ok) {
+      toast(`Saved ${result.character.name}`)
+      onCreated(result.character)
+    } else setError(result.error)
   }
 
   return (

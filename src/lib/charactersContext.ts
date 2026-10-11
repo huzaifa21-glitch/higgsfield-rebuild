@@ -5,6 +5,8 @@ export type CharactersState = {
   characters: Character[]
   limit: number
   loaded: boolean
+  error: string | null
+  reload: () => void
   create: (name: string, image: string) => Promise<CharacterResult>
   rename: (id: string, name: string) => Promise<CharacterResult>
   remove: (id: string) => Promise<boolean>

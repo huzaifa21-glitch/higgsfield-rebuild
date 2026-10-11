@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { fileToDataUrl, requestAssist, type JobType } from '../lib/api.ts'
 import { useJobs } from '../lib/jobsContext.ts'
+import { usePageTitle } from '../lib/usePageTitle.ts'
 
 // Bare pipeline test page: not linked from the nav.
 function Dev() {
+  usePageTitle('Pipeline test')
   const { jobs, credits, costs, error, live, createJob } = useJobs()
   const [type, setType] = useState<JobType>('image')
   const [prompt, setPrompt] = useState('')
@@ -121,12 +123,12 @@ function Dev() {
             {j.enhanced_prompt && <div>Assisted: {j.enhanced_prompt}</div>}
             {j.error && <div className="dev-error">Error: {j.error}</div>}
             <div className="dev-media">
-              {j.input_url && <img src={j.input_url} alt="input" />}
+              {j.input_url && <img src={j.input_url} alt="Input image" loading="lazy" />}
               {j.output_url &&
                 (j.type === 'video' ? (
-                  <video src={j.output_url} controls muted loop autoPlay playsInline />
+                  <video src={j.output_url} aria-label="Output video" controls muted loop autoPlay playsInline />
                 ) : (
-                  <img src={j.output_url} alt="output" />
+                  <img src={j.output_url} alt="Output image" loading="lazy" />
                 ))}
             </div>
           </li>

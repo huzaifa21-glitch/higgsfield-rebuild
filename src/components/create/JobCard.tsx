@@ -3,6 +3,7 @@ import { downloadUrl, type Job } from '../../lib/api.ts'
 import { friendlyError, jobTitle } from '../../lib/jobText.ts'
 import DemoBadge from '../DemoBadge.tsx'
 import { useCharacters } from '../../lib/charactersContext.ts'
+import { useToast } from '../../lib/toastContext.ts'
 import { usePresets } from '../../lib/usePresets.ts'
 
 const ASPECT_RATIO: Record<string, string> = { '1:1': '1 / 1', '3:4': '3 / 4', '16:9': '16 / 9' }
@@ -37,6 +38,7 @@ function JobCard({ job, onUseAsReference, onOpen }: Props) {
   const { presets } = usePresets()
   const preset = job.preset_id ? presets?.find((p) => p.id === job.preset_id) : undefined
   const { characters } = useCharacters()
+  const toast = useToast()
   const character = job.character_id ? characters.find((c) => c.id === job.character_id) : undefined
   const pending = job.status === 'queued' || job.status === 'running'
   const done = job.status === 'done' && job.output_url
@@ -62,6 +64,8 @@ function JobCard({ job, onUseAsReference, onOpen }: Props) {
         {done &&
           (job.type === 'video' ? (
             <video
+              aria-label={jobTitle(job, preset?.name)}
+              preload="metadata"
               className={loaded ? 'loaded' : ''}
               src={job.output_url!}
               onLoadedData={() => setLoaded(true)}
@@ -72,7 +76,14 @@ function JobCard({ job, onUseAsReference, onOpen }: Props) {
               controls={!onOpen}
             />
           ) : (
-            <img className={loaded ? 'loaded' : ''} src={job.output_url!} alt={job.prompt} onLoad={() => setLoaded(true)} />
+            <img
+              className={loaded ? 'loaded' : ''}
+              src={job.output_url!}
+              alt={jobTitle(job, preset?.name)}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setLoaded(true)}
+            />
           ))}
 
         {job.status === 'failed' && (
@@ -91,7 +102,7 @@ function JobCard({ job, onUseAsReference, onOpen }: Props) {
       <div className="job-body">
         {character && (
           <span className="character-chip">
-            <img src={character.image_url} alt="" />
+            <img src={character.image_url} alt="" loading="lazy" decoding="async" />
             {character.name}
           </span>
         )}
@@ -104,7 +115,7 @@ function JobCard({ job, onUseAsReference, onOpen }: Props) {
         )}
         {job.enhanced_prompt && (
           <p className="job-assisted">
-            <span className="tag">Assist</span> {job.enhanced_prompt}
+            <span className="enhanced-label">Enhanced:</span> {job.enhanced_prompt}
           </p>
         )}
         <div className="job-footer">
@@ -121,7 +132,7 @@ function JobCard({ job, onUseAsReference, onOpen }: Props) {
                   Use as reference
                 </button>
               )}
-              <a className="ghost-btn" href={downloadUrl(job)}>
+              <a className="ghost-btn" href={downloadUrl(job)} onClick={() => toast('Download started')}>
                 Download
               </a>
             </span>

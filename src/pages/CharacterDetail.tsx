@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import JobCard from '../components/create/JobCard.tsx'
+import { ErrorState } from '../components/States.tsx'
+import { usePageTitle } from '../lib/usePageTitle.ts'
+import { useToast } from '../lib/toastContext.ts'
 import type { Reference } from '../components/create/ReferenceInput.tsx'
 import type { Character } from '../lib/api.ts'
 import { useCharacters } from '../lib/charactersContext.ts'
@@ -12,6 +15,7 @@ import './Characters.css'
 
 function CharacterView({ character }: { character: Character }) {
   const { rename, remove } = useCharacters()
+  const toast = useToast()
   const { jobs } = useJobs()
   const { photo, setPhoto } = usePhoto()
   const navigate = useNavigate()
@@ -33,6 +37,7 @@ function CharacterView({ character }: { character: Character }) {
     if (result.ok) {
       setEditing(false)
       setError(null)
+      toast(`Renamed to ${result.character.name}`)
       // Keep the session photo's label in step if this character is the one selected.
       if (photo?.kind === 'character' && photo.characterId === character.id) setPhoto({ ...ref, name: result.character.name })
     } else setError(result.error)
@@ -44,6 +49,7 @@ function CharacterView({ character }: { character: Character }) {
     setBusy(false)
     if (!ok) return setError("Couldn't delete this character. Try again.")
     if (photo?.kind === 'character' && photo.characterId === character.id) setPhoto(null)
+    toast(`Deleted ${character.name}. Their outputs are still in your library.`, 'info')
     navigate('/characters')
   }
 
@@ -145,9 +151,23 @@ function CharacterView({ character }: { character: Character }) {
 
 function CharacterDetail() {
   const { id } = useParams()
-  const { characters, loaded } = useCharacters()
-  if (!loaded) return <div className="character-page" aria-busy="true" />
+  const { characters, loaded, error, reload } = useCharacters()
   const character = characters.find((c) => c.id === id)
+  usePageTitle(character?.name ?? (loaded ? 'Character not found' : 'Character'))
+  if (!loaded) {
+    return (
+      <div className="character-page" aria-busy="true" aria-label="Loading character">
+        <div className="character-hero">
+          <div className="skel" style={{ aspectRatio: '3 / 4' }} />
+          <div className="character-side" aria-hidden="true">
+            <div className="skel" style={{ height: 44, width: 220 }} />
+            <div className="skel" style={{ height: 50, width: 260 }} />
+          </div>
+        </div>
+      </div>
+    )
+  }
+  if (error) return <ErrorState title="This character didn't load" message={error} onRetry={reload} />
   if (!character) {
     return (
       <section className="placeholder">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   fetchJobs,
   fetchSession,
@@ -12,6 +12,7 @@ import {
 } from './api.ts'
 import { JobsContext } from './jobsContext.ts'
 import { supabase } from './supabase.ts'
+import { useToast } from './toastContext.ts'
 
 function upsert(jobs: Job[], job: Job) {
   const rest = jobs.filter((j) => j.id !== job.id)
@@ -31,6 +32,9 @@ export function JobsProvider({ children }: { children: ReactNode }) {
   const [degraded, setDegraded] = useState<SiteStatus['degraded']>(null)
   // Set from a 429's retry_after; generate buttons count down until it passes.
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null)
+  const toast = useToast()
+  // Jobs already known to be refunded, so each refund is announced once (and never for old jobs).
+  const refundsSeen = useRef(new Set<string>())
 
   const refreshStatus = useCallback(() => {
     fetchStatus()
@@ -62,6 +66,11 @@ export function JobsProvider({ children }: { children: ReactNode }) {
           .on('broadcast', { event: 'job' }, ({ payload }) => {
             const job = payload as Job
             setJobs((prev) => upsert(prev, job))
+            if (job.refunded && job.cost > 0 && !refundsSeen.current.has(job.id)) {
+              refundsSeen.current.add(job.id)
+              const amount = `${job.cost} ${job.cost === 1 ? 'credit' : 'credits'}`
+              toast(job.status === 'failed' ? `Didn't work out, so ${amount} refunded` : `Demo output, so ${amount} refunded`, 'info')
+            }
             if (job.status === 'done' && job.is_demo && job.type !== 'video') refreshStatus()
           })
           .on('broadcast', { event: 'credits' }, ({ payload }) => setCredits((payload as { credits: number }).credits))
@@ -69,6 +78,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
 
         const fetched = await fetchJobs()
         if (cancelled) return
+        for (const j of fetched) if (j.refunded) refundsSeen.current.add(j.id)
         // Anything Realtime delivered while the fetch was in flight is newer, so it wins.
         setJobs((prev) => prev.reduce(upsert, fetched))
         setLoaded(true)
@@ -79,7 +89,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       cancelled = true
       if (channel) supabase.removeChannel(channel)
     }
-  }, [refreshStatus])
+  }, [refreshStatus, toast])
 
   // Fallback if Realtime is down: poll while anything is still in flight, so cards never hang.
   const pending = jobs.some((j) => !j.id.startsWith('temp-') && (j.status === 'queued' || j.status === 'running'))

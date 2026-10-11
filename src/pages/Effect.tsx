@@ -10,6 +10,9 @@ import { useCooldown } from '../lib/useCooldown.ts'
 import { useCharacters } from '../lib/charactersContext.ts'
 import { usePhoto } from '../lib/photoContext.ts'
 import { usePresets } from '../lib/usePresets.ts'
+import { ErrorState } from '../components/States.tsx'
+import { usePageTitle } from '../lib/usePageTitle.ts'
+import { useToast } from '../lib/toastContext.ts'
 import './Create.css'
 import './Effects.css'
 
@@ -27,6 +30,7 @@ function Elapsed({ since }: { since: number }) {
 function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
   const { jobs, credits: balance, costs, createJob } = useJobs()
   const cooldown = useCooldown()
+  const toast = useToast()
   const { photo: sessionPhoto, setPhoto } = usePhoto()
   const { characters, limit, loaded: charactersLoaded, create: createCharacter } = useCharacters()
   // A character deleted since it was picked no longer counts as the photo.
@@ -62,6 +66,7 @@ function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
         input = { kind: 'character', characterId: saved.character.id, url: saved.character.image_url, name: saved.character.name }
         setPhoto(input)
         setSaveAsCharacter(false)
+        toast(`Saved ${saved.character.name} as a character`)
       } else {
         setMessage(`Couldn't save the character: ${saved.error} The effect still runs on your photo.`)
       }
@@ -176,7 +181,7 @@ function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
 
         {done && (
           <div className="result-actions">
-            <a className="ghost-btn" href={downloadUrl(job!)}>
+            <a className="ghost-btn" href={downloadUrl(job!)} onClick={() => toast('Download started')}>
               Download
             </a>
             <button type="button" className="ghost-btn" onClick={() => moreRef.current?.scrollIntoView({ behavior: 'smooth' })}>
@@ -206,24 +211,39 @@ function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
 
 function Effect() {
   const { id } = useParams()
-  const { presets, error } = usePresets()
+  const { presets, error, reload } = usePresets()
+  const preset = presets?.find((p) => p.id === id && !p.retired)
+  usePageTitle(preset?.name ?? (presets ? 'Effect not found' : 'Effect'))
 
-  if (error) return <p className="field-error">Couldn't load this effect. {error}</p>
-  if (!presets) return <div className="effect-page loading" aria-busy="true" />
-
-  const preset = presets.find((p) => p.id === id)
+  if (error) return <ErrorState title="This effect didn't load" message={error} onRetry={reload} />
+  if (!presets) {
+    return (
+      <div className="effect-page" aria-busy="true" aria-label="Loading effect">
+        <div className="effect-stage">
+          <div className="skel" style={{ aspectRatio: '3 / 4' }} />
+        </div>
+        <div className="effect-side" aria-hidden="true">
+          <div className="skel skel-line" style={{ width: '30%' }} />
+          <div className="skel" style={{ height: 40, width: '60%' }} />
+          <div className="skel skel-line" style={{ width: '85%' }} />
+          <div className="skel" style={{ height: 120 }} />
+          <div className="skel" style={{ height: 50 }} />
+        </div>
+      </div>
+    )
+  }
   if (!preset) {
     return (
       <section className="placeholder">
         <h1>Effect not found</h1>
         <p>
-          <Link to="/">See all effects</Link>
+          That effect doesn't exist or was retired. <Link to="/">See all effects</Link>
         </p>
       </section>
     )
   }
   // key: switching effects starts fresh (no stale result), while the photo stays in session state.
-  return <EffectView key={preset.id} preset={preset} others={presets.filter((p) => p.id !== preset.id)} />
+  return <EffectView key={preset.id} preset={preset} others={presets.filter((p) => p.id !== preset.id && !p.retired)} />
 }
 
 export default Effect

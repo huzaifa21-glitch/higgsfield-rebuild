@@ -104,6 +104,8 @@ export type Preset = {
   description: string | null
   cost: number
   featured: boolean
+  // Kept only so past jobs show their effect's name; not offered anywhere.
+  retired: boolean
   after_url: string | null
   before_url: string | null
 }
@@ -124,7 +126,11 @@ export function fetchPresets() {
 let sessionPromise: Promise<SessionInfo> | undefined
 export function fetchSession() {
   sessionPromise ??= fetch('/api/session').then(async (res) => {
-    if (!res.ok) throw new Error(`GET /api/session failed: HTTP ${res.status}`)
+    if (!res.ok) {
+      // Don't cache a failure: the next caller (e.g. a Try again button) gets a fresh request.
+      sessionPromise = undefined
+      throw new Error(`GET /api/session failed: HTTP ${res.status}`)
+    }
     return (await res.json()) as SessionInfo
   })
   return sessionPromise

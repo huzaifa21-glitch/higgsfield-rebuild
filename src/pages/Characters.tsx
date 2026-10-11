@@ -1,20 +1,33 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import CharacterCreator from '../components/characters/CharacterCreator.tsx'
+import { ErrorState, SkeletonGrid } from '../components/States.tsx'
+import { usePageTitle } from '../lib/usePageTitle.ts'
 import { useCharacters } from '../lib/charactersContext.ts'
 import { useJobs } from '../lib/jobsContext.ts'
 import './Create.css'
 import './Characters.css'
 
 function Characters() {
-  const { characters, limit, loaded } = useCharacters()
+  const { characters, limit, loaded, error, reload } = useCharacters()
+  usePageTitle('Characters')
   const { jobs } = useJobs()
   const navigate = useNavigate()
   const [creating, setCreating] = useState(false)
   const full = characters.length >= limit
   const goTo = (id: string) => navigate(`/characters/${id}`)
 
-  if (!loaded) return <div className="characters" aria-busy="true" />
+  if (!loaded) {
+    return (
+      <div className="characters">
+        <header className="page-head">
+          <h1>Characters</h1>
+        </header>
+        <SkeletonGrid count={3} className="character-grid" lines={2} />
+      </div>
+    )
+  }
+  if (error) return <ErrorState title="Characters didn't load" message={error} onRetry={reload} />
 
   if (characters.length === 0) {
     return (
@@ -40,7 +53,7 @@ function Characters() {
           const made = jobs.filter((j) => j.character_id === c.id).length
           return (
             <Link key={c.id} to={`/characters/${c.id}`} className="character-card">
-              <img src={c.image_url} alt="" />
+              <img src={c.image_url} alt="" loading="lazy" decoding="async" />
               <span className="character-name">{c.name}</span>
               <span className="character-meta">{made === 0 ? 'Nothing made yet' : `${made} ${made === 1 ? 'creation' : 'creations'}`}</span>
             </Link>

@@ -1,6 +1,8 @@
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import JobCard from '../components/create/JobCard.tsx'
 import JobDetail from '../components/library/JobDetail.tsx'
+import { ErrorState, SkeletonGrid } from '../components/States.tsx'
+import { usePageTitle } from '../lib/usePageTitle.ts'
 import { useCharacters } from '../lib/charactersContext.ts'
 import { useJobs } from '../lib/jobsContext.ts'
 import { jobKind, type JobKind } from '../lib/jobText.ts'
@@ -16,7 +18,8 @@ const FILTERS: { id: 'all' | JobKind; label: string; empty: string }[] = [
 
 // Filter and open job live in the URL, so Back closes the detail view and links can be shared.
 function Library() {
-  const { jobs, loaded } = useJobs()
+  const { jobs, loaded, error } = useJobs()
+  usePageTitle('Library')
   const [params, setParams] = useSearchParams()
   const location = useLocation()
   const navigate = useNavigate()
@@ -60,7 +63,11 @@ function Library() {
         <p>{loaded ? `${real.length} ${real.length === 1 ? 'creation' : 'creations'} this session` : 'Loading…'}</p>
       </header>
 
-      {loaded && real.length === 0 ? (
+      {error && !loaded ? (
+        <ErrorState title="Your library didn't load" message="We couldn't reach your session. Check your connection and try again." onRetry={() => window.location.reload()} />
+      ) : !loaded ? (
+        <SkeletonGrid count={6} />
+      ) : real.length === 0 ? (
         <div className="library-empty">
           <p>Nothing yet.</p>
           <Link to="/" className="primary-sm">
@@ -101,7 +108,7 @@ function Library() {
                   aria-pressed={characterId === c.id}
                   onClick={() => update({ character: c.id }, true)}
                 >
-                  <img src={c.image_url} alt="" />
+                  <img src={c.image_url} alt="" loading="lazy" decoding="async" />
                   {c.name} <span className="chip-count">{real.filter((j) => j.character_id === c.id).length}</span>
                 </button>
               ))}

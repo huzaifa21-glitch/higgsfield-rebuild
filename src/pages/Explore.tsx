@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
 import EffectCard from '../components/effects/EffectCard.tsx'
+import { ErrorState } from '../components/States.tsx'
 import { useCharacters } from '../lib/charactersContext.ts'
 import { useJobs } from '../lib/jobsContext.ts'
 import { usePhoto } from '../lib/photoContext.ts'
+import { usePageTitle } from '../lib/usePageTitle.ts'
 import { usePresets } from '../lib/usePresets.ts'
 import './Create.css'
 import './Effects.css'
@@ -10,7 +12,8 @@ import './Effects.css'
 const FIRST_EFFECT = 'film-noir'
 
 function Explore() {
-  const { presets, error } = usePresets()
+  const { presets, error, reload } = usePresets()
+  usePageTitle(null)
   const { jobs, loaded } = useJobs()
   const firstRun = loaded && jobs.length === 0
   const { photo, setPhoto } = usePhoto()
@@ -36,7 +39,7 @@ function Explore() {
 
       {character && (
         <div className="using-character">
-          <img src={character.image_url} alt="" />
+          <img src={character.image_url} alt="" decoding="async" />
           <span>
             Effects will use <strong>{character.name}</strong>. Pick any look below.
           </span>
@@ -49,13 +52,15 @@ function Explore() {
         </div>
       )}
 
-      {error && <p className="field-error">Couldn't load effects. {error}</p>}
-
-      <div className="effect-grid">
-        {presets
-          ? presets.map((p, i) => <EffectCard key={p.id} preset={p} eager={i < 4} />)
-          : Array.from({ length: 8 }, (_, i) => <div key={i} className="effect-card placeholder-card" aria-hidden="true" />)}
-      </div>
+      {error ? (
+        <ErrorState title="Effects didn't load" message={error} onRetry={reload} />
+      ) : (
+        <div className="effect-grid" aria-busy={!presets}>
+          {presets
+            ? presets.filter((p) => !p.retired).map((p, i) => <EffectCard key={p.id} preset={p} eager={i < 4} />)
+            : Array.from({ length: 8 }, (_, i) => <div key={i} className="effect-card placeholder-card" aria-hidden="true" />)}
+        </div>
+      )}
     </div>
   )
 }

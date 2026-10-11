@@ -68,6 +68,12 @@ button {
   cursor: pointer;
 }
 
+/* Our own :active and :focus-visible styles replace the mobile tap flash. */
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
 button:disabled {
   cursor: not-allowed;
 }
@@ -90,4 +96,12 @@ button:disabled {
 a {
   color: var(--accent);
   text-underline-offset: 3px;
+}
+
+/* Text fields show focus with a ring as well as the accent border. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

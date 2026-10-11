@@ -1,6 +1,8 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useLocation } from 'react-router-dom'
 import JobCard from '../components/create/JobCard.tsx'
+import { ErrorState, SkeletonGrid } from '../components/States.tsx'
+import { usePageTitle } from '../lib/usePageTitle.ts'
 import ReferenceInput, { type Reference } from '../components/create/ReferenceInput.tsx'
 import { ASPECTS, requestAssist, type Aspect, type AssistResult, type Job, type JobType } from '../lib/api.ts'
 import CharacterPicker from '../components/characters/CharacterPicker.tsx'
@@ -40,7 +42,8 @@ function AspectIcon({ aspect }: { aspect: Aspect }) {
 }
 
 function Create() {
-  const { jobs, credits: balance, costs, createJob } = useJobs()
+  const { jobs, loaded, error: jobsError, credits: balance, costs, createJob } = useJobs()
+  usePageTitle('Create')
   const { characters } = useCharacters()
   const cooldown = useCooldown()
   // Remix / Use as reference from the Library arrive as router state with the exact settings to restore.
@@ -311,7 +314,11 @@ function Create() {
       </form>
 
       <section className="results" aria-label="Results" aria-live="polite">
-        {jobs.length === 0 ? (
+        {jobsError && jobs.length === 0 ? (
+          <ErrorState title="Couldn't connect" message="We couldn't start your session. Check your connection and try again." onRetry={() => window.location.reload()} />
+        ) : !loaded && jobs.length === 0 ? (
+          <SkeletonGrid count={3} />
+        ) : jobs.length === 0 ? (
           <div className="empty">
             <h1>What do you want to make?</h1>
             <p>Pick an example to start, or write your own.</p>

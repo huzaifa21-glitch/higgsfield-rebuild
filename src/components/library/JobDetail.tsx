@@ -7,6 +7,7 @@ import { useCooldown } from '../../lib/useCooldown.ts'
 import { useCharacters } from '../../lib/charactersContext.ts'
 import { usePhoto } from '../../lib/photoContext.ts'
 import { urlToDataUrl, type CreatePrefill } from '../../lib/prefill.ts'
+import { useToast } from '../../lib/toastContext.ts'
 import { usePresets } from '../../lib/usePresets.ts'
 import DemoBadge from '../DemoBadge.tsx'
 import type { Reference } from '../create/ReferenceInput.tsx'
@@ -24,6 +25,7 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
   const navigate = useNavigate()
   const { jobs, credits: balance, costs, createJob } = useJobs()
   const cooldown = useCooldown()
+  const toast = useToast()
   const { presets } = usePresets()
   const { setPhoto } = usePhoto()
   const { characters } = useCharacters()
@@ -114,7 +116,7 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
       <div className="detail-media">
         {done ? (
           job.type === 'video' ? (
-            <video className={loaded ? 'loaded' : ''} src={job.output_url!} onLoadedData={() => setLoaded(true)} autoPlay muted loop playsInline controls />
+            <video aria-label={jobTitle(job, preset?.name)} className={loaded ? 'loaded' : ''} src={job.output_url!} onLoadedData={() => setLoaded(true)} autoPlay muted loop playsInline controls />
           ) : (
             <img className={loaded ? 'loaded' : ''} src={job.output_url!} alt={jobTitle(job, preset?.name)} onLoad={() => setLoaded(true)} />
           )
@@ -144,7 +146,7 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
 
         {job.parent_job_id && (
           <button type="button" className="lineage" onClick={() => onOpenJob(job.parent_job_id!)} disabled={!parent}>
-            {parent?.output_url && parent.type !== 'video' && <img src={parent.output_url} alt="" />}
+            {parent?.output_url && parent.type !== 'video' && <img src={parent.output_url} alt="" loading="lazy" />}
             <span>
               {job.type === 'video' ? 'Animated from' : 'Made from'} <strong>{parent ? jobTitle(parent, presets?.find((p) => p.id === parent.preset_id)?.name) : 'an earlier job'}</strong> →
             </span>
@@ -163,7 +165,7 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
               <dt>Character</dt>
               <dd>
                 <Link to={`/characters/${character.id}`} className="character-chip link">
-                  <img src={character.image_url} alt="" />
+                  <img src={character.image_url} alt="" loading="lazy" />
                   {character.name}
                 </Link>
               </dd>
@@ -173,7 +175,7 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
             <div>
               <dt>{job.preset_id ? 'Input photo' : 'Reference image'}</dt>
               <dd>
-                <img className="detail-input" src={job.input_url} alt="Input" />
+                <img className="detail-input" src={job.input_url} alt={job.preset_id ? 'Input photo' : 'Reference image'} loading="lazy" />
               </dd>
             </div>
           )}
@@ -195,7 +197,7 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
             </button>
           )}
           {done && (
-            <a className="ghost-btn" href={downloadUrl(job)}>
+            <a className="ghost-btn" href={downloadUrl(job)} onClick={() => toast('Download started')}>
               Download
             </a>
           )}
