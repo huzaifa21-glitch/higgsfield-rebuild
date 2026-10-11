@@ -30,6 +30,9 @@ const BASE_PROMPT =
   'studio headshot photo of a fictional person in their late twenties, neutral relaxed expression, looking at the camera, ' +
   'plain light gray background, soft even lighting, wearing a plain white t-shirt, head and shoulders, photorealistic'
 
+// Studio Portrait was replaced by Astronaut (see DECISIONS.md, "Polish").
+const RETIRED = ['studio-portrait']
+
 type Preset = { id: string; name: string; description: string; prompt: string; featured?: boolean }
 
 const PRESETS: Preset[] = [
@@ -59,12 +62,12 @@ const PRESETS: Preset[] = [
       'rain-soaked neon city alley at night, magenta and cyan neon lighting',
   },
   {
-    id: 'studio-portrait',
-    name: 'Studio Portrait',
-    description: 'A polished professional headshot.',
+    id: 'astronaut',
+    name: 'Astronaut',
+    description: 'Suited up on the Moon, with Earth rising behind.',
     prompt:
-      'the same person in a professional studio portrait, wearing a tailored charcoal blazer, plain warm gray backdrop, ' +
-      'soft key light with a gentle rim light, sharp focus, 85mm lens',
+      'the same person as an astronaut, wearing a white NASA-style spacesuit with the helmet off, standing on the grey lunar surface, ' +
+      'Earth rising in the black sky behind, crisp hard sunlight, cinematic photo',
   },
   {
     id: 'claymation',
@@ -170,4 +173,14 @@ for (const [order, p] of PRESETS.entries()) {
   })
   if (error) throw error
 }
-console.log(`\nseeded ${PRESETS.length} presets; before image ${beforeUrl}`)
+// Retire replaced presets only now that the new ones exist, so the gallery never has a gap.
+// Rows are kept (kind = 'retired' hides them) because past jobs reference them.
+const { data: retired, error: retireError } = await db
+  .from('presets')
+  .update({ kind: 'retired', featured: false })
+  .in('id', RETIRED)
+  .neq('kind', 'retired')
+  .select('id')
+if (retireError) throw retireError
+if (retired.length) console.log(`retired: ${retired.map((r) => r.id).join(', ')}`)
+console.log(`\nseeded ${only ? only.length : PRESETS.length} presets; before image ${beforeUrl}`)
