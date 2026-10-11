@@ -24,3 +24,6 @@ scripts/out/
 *.sw?
 .env*
 .vercel
+
+.vercel
+.env*
