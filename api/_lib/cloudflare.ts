@@ -4,7 +4,8 @@ import { JobError, type JobErrorCode } from './errors.js'
 // Workers AI internal error codes (developers.cloudflare.com/workers-ai/platform/errors).
 const CODE_MAP: Record<number, JobErrorCode> = {
   3030: 'safety_filter',
-  3036: 'quota',
+  3036: 'quota', // documented code for the daily free allocation
+  4006: 'quota', // what the API actually returns for it (seen 2026-10-11)
   3040: 'capacity',
   3007: 'timeout',
   3008: 'timeout',
@@ -19,8 +20,10 @@ export function classify(status: number, body: string): JobErrorCode {
     const errors = (JSON.parse(body) as { errors?: { code?: number }[] }).errors ?? []
     for (const e of errors) if (e.code && CODE_MAP[e.code]) return CODE_MAP[e.code]
   } catch {
-    // Not JSON: fall through to the status code.
+    // Not JSON: fall through to the message and status checks.
   }
+  // Codes have drifted from the docs before, so also recognise the message itself.
+  if (/daily free allocation/i.test(body)) return 'quota'
   if (status === 429) return 'capacity'
   if (status === 408 || status === 504) return 'timeout'
   return 'provider_error'

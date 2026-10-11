@@ -78,6 +78,8 @@ export async function runJob(job: ProviderJob) {
         output_url: outputUrl,
         is_demo: result.isDemo ?? false,
         refunded: fellBack,
+        // Record what actually produced the output, so the Library doesn't credit FLUX for a demo sample.
+        ...(fellBack && { model: mockImage.model }),
         completed_at: new Date().toISOString(),
       })
       .eq('id', job.id)
