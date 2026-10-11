@@ -43,6 +43,71 @@ main {
   padding: 48px 16px;
 }
 
+.dev {
+  max-width: 800px;
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+}
+
+.dev-form {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+  }
+}
+
+.dev-input {
+  display: grid;
+  gap: 6px;
+}
+
+.dev-error {
+  color: #d33;
+}
+
+.dev-jobs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.dev-job {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+
+  &.status-done {
+    border-color: var(--accent);
+  }
+  &.status-failed {
+    border-color: #d33;
+  }
+}
+
+.dev-media {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  img,
+  video {
+    max-width: 240px;
+    max-height: 320px;
+    border-radius: 6px;
+  }
+}
+
 .placeholder {
   max-width: 560px;
   margin: 0 auto;

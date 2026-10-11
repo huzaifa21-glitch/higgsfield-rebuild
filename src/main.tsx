@@ -8,6 +8,7 @@ import Create from './pages/Create.tsx'
 import Characters from './pages/Characters.tsx'
 import Library from './pages/Library.tsx'
 import NotFound from './pages/NotFound.tsx'
+import Dev from './pages/Dev.tsx'
 
 const router = createBrowserRouter([
   {
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
       { path: 'create', element: <Create /> },
       { path: 'characters', element: <Characters /> },
       { path: 'library', element: <Library /> },
+      { path: 'dev', element: <Dev /> },
       { path: '*', element: <NotFound /> },
     ],
   },
