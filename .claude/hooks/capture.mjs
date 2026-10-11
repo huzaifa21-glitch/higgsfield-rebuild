@@ -172,7 +172,7 @@ function entry(type, num, short, ts, model, text, extra = '') {
 }
 
 function parseFile(file) {
-  const raw = fs.readFileSync(file, 'utf8');
+  const raw = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
   const m = raw.match(/^---\n([\s\S]*?)\n---\n/);
   const meta = {};
   for (const line of (m ? m[1] : '').split('\n')) {
