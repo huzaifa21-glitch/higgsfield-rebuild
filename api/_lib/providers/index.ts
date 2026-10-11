@@ -3,7 +3,8 @@ import { cloudflareImage } from './cloudflare-image.js'
 import { mockVideo } from './mock-video.js'
 import type { JobType, Provider } from './types.js'
 
-export type { JobParams, JobType, Provider, ProviderJob, ProviderResult } from './types.js'
+export { ASPECT_SIZES, isAspect } from './types.js'
+export type { Aspect, JobParams, JobType, Provider, ProviderJob, ProviderResult } from './types.js'
 
 export const COSTS: Record<JobType, number> = { image: 1, effect: 2, video: 5 }
 

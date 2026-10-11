@@ -1,11 +1,105 @@
-import Placeholder from '../components/Placeholder.tsx'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import JobCard from '../components/create/JobCard.tsx'
+import JobDetail from '../components/library/JobDetail.tsx'
+import { useJobs } from '../lib/jobsContext.ts'
+import { jobKind, type JobKind } from '../lib/jobText.ts'
+import './Create.css'
+import './Library.css'
 
+const FILTERS: { id: 'all' | JobKind; label: string; empty: string }[] = [
+  { id: 'all', label: 'All', empty: '' },
+  { id: 'image', label: 'Images', empty: 'No images yet.' },
+  { id: 'effect', label: 'Effects', empty: 'No effects yet.' },
+  { id: 'video', label: 'Videos', empty: 'No videos yet. Open an image and choose Animate.' },
+]
+
+// Filter and open job live in the URL, so Back closes the detail view and links can be shared.
 function Library() {
+  const { jobs, loaded } = useJobs()
+  const [params, setParams] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const filter = (FILTERS.find((f) => f.id === params.get('filter')) ?? FILTERS[0]).id
+  const openId = params.get('job')
+  const real = jobs.filter((j) => !j.id.startsWith('temp-'))
+  const shown = filter === 'all' ? real : real.filter((j) => jobKind(j) === filter)
+  const open = openId ? real.find((j) => j.id === openId) : undefined
+
+  const count = (id: 'all' | JobKind) => (id === 'all' ? real.length : real.filter((j) => jobKind(j) === id).length)
+
+  function update(changes: Record<string, string | null>, replace = false, state?: unknown) {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const [k, v] of Object.entries(changes)) {
+          if (v === null) next.delete(k)
+          else next.set(k, v)
+        }
+        return next
+      },
+      { replace, state },
+    )
+  }
+
+  // Opening a job adds a history entry; closing steps back over it, so Back never reopens a closed detail.
+  const openJob = (id: string) => update({ job: id }, false, { detailFromLibrary: true })
+  function closeJob() {
+    if ((location.state as { detailFromLibrary?: boolean } | null)?.detailFromLibrary) navigate(-1)
+    else update({ job: null }, true)
+  }
+
   return (
-    <Placeholder
-      title="Library"
-      description="Everything you've made, with remix and image-to-video."
-    />
+    <div className="library">
+      <header className="library-head">
+        <h1>Library</h1>
+        <p>{loaded ? `${real.length} ${real.length === 1 ? 'creation' : 'creations'} this session` : 'Loading…'}</p>
+      </header>
+
+      {loaded && real.length === 0 ? (
+        <div className="library-empty">
+          <p>Nothing yet.</p>
+          <Link to="/" className="primary-sm">
+            Try an effect
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div className="chips" role="group" aria-label="Filter">
+            {FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className={`chip${filter === f.id ? ' active' : ''}`}
+                aria-pressed={filter === f.id}
+                onClick={() => update({ filter: f.id === 'all' ? null : f.id }, true)}
+              >
+                {f.label} <span className="chip-count">{count(f.id)}</span>
+              </button>
+            ))}
+          </div>
+
+          {shown.length === 0 && loaded ? (
+            <p className="library-none">{FILTERS.find((f) => f.id === filter)?.empty}</p>
+          ) : (
+            <div className="feed">
+              {shown.map((job) => (
+                <JobCard key={job.id} job={job} onOpen={(j) => openJob(j.id)} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {open && (
+        <JobDetail
+          key={open.id}
+          job={open}
+          onClose={closeJob}
+          // Lineage links and Animate swap the open detail in place, so × still returns to the grid.
+          onOpenJob={(id) => update({ job: id }, true, location.state)}
+        />
+      )}
+    </div>
   )
 }
 

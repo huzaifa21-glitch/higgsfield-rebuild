@@ -1,13 +1,18 @@
+import sharp from 'sharp'
 import { providerFor, type ProviderJob } from './providers/index.js'
 import { OUTPUTS_BUCKET, db } from './supabase.js'
 
 // Columns safe to send to the browser (never session_id: it's the auth credential).
 export const PUBLIC_JOB_COLUMNS =
-  'id, type, status, prompt, enhanced_prompt, input_url, parent_job_id, model, params, cost, output_url, is_demo, error, created_at, completed_at'
+  'id, type, status, preset_id, prompt, enhanced_prompt, input_url, parent_job_id, model, params, cost, output_url, is_demo, error, created_at, completed_at'
 
 // Must finish (and refund on failure) before the function's maxDuration (60s in vercel.json) kills it,
 // otherwise the job would be stuck "running" with the credits spent.
 const PROVIDER_TIMEOUT_MS = 45_000
+
+// Outputs are stored as WebP: ~5x smaller than the models' JPEGs (650KB -> ~125KB) with no visible loss,
+// which is most of the wait between 'done' and the image appearing.
+const WEBP_QUALITY = 86
 
 const EXTENSIONS: Record<string, string> = {
   'image/png': 'png',
@@ -33,10 +38,11 @@ export async function runJob(job: ProviderJob) {
 
     let outputUrl: string
     if ('buffer' in result) {
-      const path = `jobs/${job.id}.${EXTENSIONS[result.contentType] ?? 'bin'}`
-      const { error } = await db().storage
-        .from(OUTPUTS_BUCKET)
-        .upload(path, result.buffer, { contentType: result.contentType, upsert: false })
+      const isImage = result.contentType.startsWith('image/')
+      const buffer = isImage ? await sharp(result.buffer).webp({ quality: WEBP_QUALITY }).toBuffer() : result.buffer
+      const contentType = isImage ? 'image/webp' : result.contentType
+      const path = `jobs/${job.id}.${EXTENSIONS[contentType] ?? 'bin'}`
+      const { error } = await db().storage.from(OUTPUTS_BUCKET).upload(path, buffer, { contentType, upsert: false })
       if (error) throw error
       outputUrl = db().storage.from(OUTPUTS_BUCKET).getPublicUrl(path).data.publicUrl
     } else {

@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { waitUntil } from '@vercel/functions'
 import { json, route, UUID_RE } from './_lib/http.js'
 import { PUBLIC_JOB_COLUMNS, runJob } from './_lib/pipeline.js'
-import { assistPrompt } from './_lib/providers/prompt-assist.js'
-import { COSTS, providerFor, type JobParams, type JobType } from './_lib/providers/index.js'
+import { COSTS, isAspect, providerFor, type JobParams, type JobType } from './_lib/providers/index.js'
 import { getSession } from './_lib/session.js'
 import { db, UPLOADS_BUCKET } from './_lib/supabase.js'
 
@@ -15,7 +14,18 @@ type Input =
   | { kind: 'upload'; buffer: Buffer; contentType: string }
   | { kind: 'parent'; jobId: string; url: string }
 
-type Validated = { type: JobType; prompt: string; assist: boolean; params: JobParams; input?: Input }
+type Preset = { id: string; cost: number }
+
+type Validated = {
+  type: JobType
+  prompt: string
+  enhancedPrompt: string | null
+  params: JobParams
+  input?: Input
+  preset: Preset | null
+}
+
+const PRESET_ID_RE = /^[a-z0-9-]{1,64}$/
 
 async function validate(body: unknown, sessionId: string): Promise<Validated | string> {
   if (!body || typeof body !== 'object') return 'Body must be a JSON object'
@@ -24,12 +34,46 @@ async function validate(body: unknown, sessionId: string): Promise<Validated | s
   if (b.type !== 'image' && b.type !== 'effect' && b.type !== 'video') return 'type must be "image", "effect" or "video"'
   const type = b.type
 
-  const prompt = typeof b.prompt === 'string' ? b.prompt.trim() : ''
+  // Effect presets: prompt, guidance, aspect and cost all come from the preset row, never from the client.
+  let preset: Preset | null = null
+  let presetPrompt: string | null = null
+  const presetParams: JobParams = {}
+  if (b.preset_id !== undefined) {
+    if (type !== 'effect') return 'preset_id is only valid for effect jobs'
+    if (typeof b.preset_id !== 'string' || !PRESET_ID_RE.test(b.preset_id)) return 'preset_id is not valid'
+    const { data, error } = await db()
+      .from('presets')
+      .select('id, cost, prompt_template, params')
+      .eq('id', b.preset_id)
+      .eq('kind', 'effect')
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return 'Unknown effect'
+    preset = { id: data.id, cost: data.cost }
+    presetPrompt = data.prompt_template
+    const pp = (data.params ?? {}) as Record<string, unknown>
+    if (typeof pp.guidance === 'number') presetParams.guidance = pp.guidance
+    if (isAspect(pp.aspect)) presetParams.aspect = pp.aspect
+  }
+
+  const prompt = presetPrompt ?? (typeof b.prompt === 'string' ? b.prompt.trim() : '')
   if (type !== 'video' && !prompt) return 'prompt is required'
   if (prompt.length > MAX_PROMPT) return `prompt must be at most ${MAX_PROMPT} characters`
 
+  // The Prompt Assist rewrite the user explicitly chose with Use. Generation runs on it; prompt keeps what they typed.
+  let enhancedPrompt: string | null = null
+  if (!preset && b.enhanced_prompt !== undefined && b.enhanced_prompt !== null) {
+    if (typeof b.enhanced_prompt !== 'string' || !b.enhanced_prompt.trim()) return 'enhanced_prompt must be a non-empty string'
+    if (b.enhanced_prompt.length > MAX_PROMPT) return `enhanced_prompt must be at most ${MAX_PROMPT} characters`
+    enhancedPrompt = b.enhanced_prompt.trim()
+  }
+
   const params: JobParams = {}
   const p = (b.params ?? {}) as Record<string, unknown>
+  if (p.aspect !== undefined) {
+    if (!isAspect(p.aspect)) return 'params.aspect must be "1:1", "3:4" or "16:9"'
+    params.aspect = p.aspect
+  }
   if (p.guidance !== undefined) {
     if (typeof p.guidance !== 'number' || !Number.isFinite(p.guidance) || p.guidance < 1 || p.guidance > 10)
       return 'params.guidance must be a number from 1 to 10'
@@ -63,7 +107,7 @@ async function validate(body: unknown, sessionId: string): Promise<Validated | s
   }
   if (type !== 'image' && !input) return `${type} jobs need input_image or parent_job_id`
 
-  return { type, prompt, assist: b.assist === true, params, input }
+  return { type, prompt, enhancedPrompt, params: preset ? { ...params, ...presetParams } : params, input, preset }
 }
 
 export const POST = route(async (request) => {
@@ -78,7 +122,7 @@ export const POST = route(async (request) => {
   const v = await validate(body, session.id)
   if (typeof v === 'string') return json({ error: v }, 400, setCookie)
 
-  const cost = COSTS[v.type]
+  const cost = v.preset?.cost ?? COSTS[v.type]
   const { data: balance, error: spendError } = await db().rpc('spend_credits', { p_session_id: session.id, p_cost: cost })
   if (spendError) throw spendError
   if (balance === null) {
@@ -89,8 +133,6 @@ export const POST = route(async (request) => {
   // Credits are spent from here on: any failure before the job exists must refund them.
   const jobId = randomUUID()
   try {
-    const enhanced = v.assist && v.prompt ? await assistPrompt(v.prompt) : null
-
     let inputUrl: string | undefined
     if (v.input?.kind === 'upload') {
       const ext = v.input.contentType.split('/')[1].replace('jpeg', 'jpg')
@@ -111,9 +153,10 @@ export const POST = route(async (request) => {
         session_id: session.id,
         type: v.type,
         prompt: v.prompt,
-        enhanced_prompt: enhanced,
+        enhanced_prompt: v.enhancedPrompt,
         input_url: inputUrl ?? null,
         parent_job_id: v.input?.kind === 'parent' ? v.input.jobId : null,
+        preset_id: v.preset?.id ?? null,
         model: providerFor(v.type).model,
         params: v.params,
         cost,
@@ -123,7 +166,7 @@ export const POST = route(async (request) => {
       .single()
     if (error) throw error
 
-    waitUntil(runJob({ id: jobId, type: v.type, prompt: enhanced ?? v.prompt, params: v.params, inputUrl }))
+    waitUntil(runJob({ id: jobId, type: v.type, prompt: v.enhancedPrompt ?? v.prompt, params: v.params, inputUrl }))
     return json({ job, credits: balance }, 202, setCookie)
   } catch (err) {
     console.error('job setup failed', err)
@@ -139,7 +182,7 @@ export const GET = route(async (request) => {
     .select(PUBLIC_JOB_COLUMNS)
     .eq('session_id', session.id)
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(200)
   if (error) throw error
   return json({ jobs: data }, 200, setCookie)
 })

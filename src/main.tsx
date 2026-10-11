@@ -9,6 +9,7 @@ import Characters from './pages/Characters.tsx'
 import Library from './pages/Library.tsx'
 import NotFound from './pages/NotFound.tsx'
 import Dev from './pages/Dev.tsx'
+import Effect from './pages/Effect.tsx'
 
 const router = createBrowserRouter([
   {
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Explore /> },
       { path: 'create', element: <Create /> },
+      { path: 'effects/:id', element: <Effect /> },
       { path: 'characters', element: <Characters /> },
       { path: 'library', element: <Library /> },
       { path: 'dev', element: <Dev /> },

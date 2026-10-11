@@ -1,16 +1,14 @@
 import sharp from 'sharp'
 import { runModel, sniffImageType } from '../cloudflare.js'
-import type { Provider } from './types.js'
+import { ASPECT_SIZES, type Provider } from './types.js'
 
 const MODEL = '@cf/black-forest-labs/flux-2-klein-4b'
 
 // Settings from scripts/klein-grid.ts (see DECISIONS.md, "Model validation"):
 // guidance 5 (no gain above it), 512px input (docs limit; bigger cost more and wasn't better),
-// fixed 768x1024 output (the output is ~95% of the neuron cost).
+// output size from the job aspect (default 3:4), always <= 4 tiles since the output is ~95% of the cost.
 const DEFAULT_GUIDANCE = 5
 const MAX_INPUT_SIDE = 512
-const OUT_W = 768
-const OUT_H = 1024
 
 // Image + prompt -> image. klein only accepts multipart: prompt, input_image_0..3, width, height, guidance, seed.
 export const cloudflareEdit: Provider = {
@@ -27,11 +25,12 @@ export const cloudflareEdit: Provider = {
       .jpeg({ quality: 90 })
       .toBuffer()
 
+    const { width, height } = ASPECT_SIZES[job.params.aspect ?? '3:4']
     const form = new FormData()
     form.append('prompt', job.prompt)
     form.append('input_image_0', new Blob([new Uint8Array(input)], { type: 'image/jpeg' }), 'input.jpg')
-    form.append('width', String(OUT_W))
-    form.append('height', String(OUT_H))
+    form.append('width', String(width))
+    form.append('height', String(height))
     form.append('guidance', String(job.params.guidance ?? DEFAULT_GUIDANCE))
     if (job.params.seed !== undefined) form.append('seed', String(job.params.seed))
 

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { fileToDataUrl, type JobType } from '../lib/api.ts'
-import { useJobs } from '../lib/useJobs.ts'
+import { fileToDataUrl, requestAssist, type JobType } from '../lib/api.ts'
+import { useJobs } from '../lib/jobsContext.ts'
 
 // Bare pipeline test page: not linked from the nav.
 function Dev() {
@@ -23,12 +23,14 @@ function Dev() {
     setBusy(true)
     setMessage(null)
     try {
+      // Debug page: with the box ticked, any changed rewrite is used directly (the Create page asks first).
+      const assisted = assist && prompt.trim() ? await requestAssist(prompt.trim()) : null
       const result = await createJob({
         type,
         prompt,
-        assist,
+        enhanced_prompt: assisted?.changed ? assisted.prompt : undefined,
         params: type === 'effect' ? { guidance: Number(guidance) } : undefined,
-        input_image: type !== 'image' && file && !parentId ? await fileToDataUrl(file) : undefined,
+        input_image: type !== 'image' && file && !parentId ? await fileToDataUrl(file, 512) : undefined,
         parent_job_id: type !== 'image' && parentId ? parentId : undefined,
       })
       if (!result.ok) {
