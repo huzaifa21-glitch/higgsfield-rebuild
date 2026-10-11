@@ -71,6 +71,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
         type: input.type,
         status: 'queued',
         preset_id: input.preset_id ?? null,
+        character_id: input.character_id ?? null,
         prompt: input.prompt,
         enhanced_prompt: input.enhanced_prompt ?? null,
         input_url: null,

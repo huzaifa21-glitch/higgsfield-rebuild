@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import ReferenceInput from '../components/create/ReferenceInput.tsx'
+import CharacterPicker from '../components/characters/CharacterPicker.tsx'
+import ReferenceInput, { type Reference } from '../components/create/ReferenceInput.tsx'
 import BeforeAfter from '../components/effects/BeforeAfter.tsx'
 import { downloadUrl, type Preset } from '../lib/api.ts'
 import { useJobs } from '../lib/jobsContext.ts'
 import { friendlyError } from '../lib/jobText.ts'
+import { useCharacters } from '../lib/charactersContext.ts'
 import { usePhoto } from '../lib/photoContext.ts'
 import { usePresets } from '../lib/usePresets.ts'
 import './Create.css'
@@ -23,7 +25,15 @@ function Elapsed({ since }: { since: number }) {
 
 function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
   const { jobs, credits: balance, costs, createJob } = useJobs()
-  const { photo, setPhoto } = usePhoto()
+  const { photo: sessionPhoto, setPhoto } = usePhoto()
+  const { characters, limit, loaded: charactersLoaded, create: createCharacter } = useCharacters()
+  // A character deleted since it was picked no longer counts as the photo.
+  const photo =
+    sessionPhoto?.kind === 'character' && charactersLoaded && !characters.some((c) => c.id === sessionPhoto.characterId) ? null : sessionPhoto
+  const photoSrc = photo ? (photo.kind === 'upload' ? photo.dataUrl : photo.url) : null
+  const [saveAsCharacter, setSaveAsCharacter] = useState(false)
+  const [characterName, setCharacterName] = useState('')
+  const canSaveCharacter = photo?.kind === 'upload' && characters.length < limit
   // The job started from this page; looked up in the live job list so Realtime updates it.
   const [jobId, setJobId] = useState<string | null>(null)
   const [startedAt, setStartedAt] = useState<number | null>(null)
@@ -42,7 +52,26 @@ function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
     setMessage(null)
     setJobId(null)
     setStartedAt(Date.now())
-    const result = await createJob({ type: 'effect', prompt: '', preset_id: preset.id, input_image: photo.dataUrl })
+    let input: Reference = photo
+    if (photo.kind === 'upload' && saveAsCharacter && canSaveCharacter) {
+      // Free and one step: save the face, then run the effect with it as the character.
+      const saved = await createCharacter(characterName.trim() || 'Me', photo.dataUrl)
+      if (saved.ok) {
+        input = { kind: 'character', characterId: saved.character.id, url: saved.character.image_url, name: saved.character.name }
+        setPhoto(input)
+        setSaveAsCharacter(false)
+      } else {
+        setMessage(`Couldn't save the character: ${saved.error} The effect still runs on your photo.`)
+      }
+    }
+    const result = await createJob({
+      type: 'effect',
+      prompt: '',
+      preset_id: preset.id,
+      input_image: input.kind === 'upload' ? input.dataUrl : undefined,
+      character_id: input.kind === 'character' ? input.characterId : undefined,
+      parent_job_id: input.kind === 'job' ? input.jobId : undefined,
+    })
     if (result.ok) {
       setJobId(result.job.id)
     } else {
@@ -59,10 +88,10 @@ function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
   return (
     <div className="effect-page">
       <div className="effect-stage">
-        {showResult && photo ? (
+        {showResult && photoSrc ? (
           <BeforeAfter
             key={job?.id ?? 'pending'}
-            before={photo.dataUrl}
+            before={photoSrc}
             after={done ? job!.output_url : null}
             alt={preset.name}
             overlay={
@@ -92,13 +121,36 @@ function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
         <h1>{preset.name}</h1>
         {preset.description && <p className="effect-desc">{preset.description}</p>}
 
+        <CharacterPicker
+          characters={characters}
+          selectedId={photo?.kind === 'character' ? photo.characterId : null}
+          onPick={(c) => setPhoto({ kind: 'character', characterId: c.id, url: c.image_url, name: c.name })}
+        />
+
         <div className="field">
-          <span className="label">Your photo</span>
-          <ReferenceInput
-            value={photo ? { kind: 'upload', dataUrl: photo.dataUrl, name: photo.name } : null}
-            onChange={(r) => setPhoto(r?.kind === 'upload' ? { dataUrl: r.dataUrl, name: r.name } : null)}
-            label="Upload a selfie or portrait"
-          />
+          <span className="label">{characters.length > 0 ? 'Or upload a photo' : 'Your photo'}</span>
+          <ReferenceInput value={photo} onChange={setPhoto} label="Upload a selfie or portrait" />
+          {canSaveCharacter && (
+            <div className="save-character">
+              <label className="check">
+                <input type="checkbox" checked={saveAsCharacter} onChange={(e) => setSaveAsCharacter(e.target.checked)} />
+                Save as character <span className="optional">free</span>
+              </label>
+              {saveAsCharacter && (
+                <input
+                  className="text-input"
+                  value={characterName}
+                  onChange={(e) => setCharacterName(e.target.value)}
+                  placeholder="Name, e.g. Me"
+                  maxLength={40}
+                  aria-label="Character name"
+                />
+              )}
+            </div>
+          )}
+          {photo?.kind === 'upload' && !canSaveCharacter && (
+            <small className="hint-line left">All {limit} character slots are full. <Link to="/characters">Manage characters</Link></small>
+          )}
           {photo && <small className="hint-line left">Kept for this session: try other effects without re-uploading.</small>}
         </div>
 

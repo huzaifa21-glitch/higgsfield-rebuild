@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import JobCard from '../components/create/JobCard.tsx'
 import JobDetail from '../components/library/JobDetail.tsx'
+import { useCharacters } from '../lib/charactersContext.ts'
 import { useJobs } from '../lib/jobsContext.ts'
 import { jobKind, type JobKind } from '../lib/jobText.ts'
 import './Create.css'
@@ -21,11 +22,15 @@ function Library() {
   const navigate = useNavigate()
   const filter = (FILTERS.find((f) => f.id === params.get('filter')) ?? FILTERS[0]).id
   const openId = params.get('job')
+  const { characters } = useCharacters()
+  const characterId = characters.some((c) => c.id === params.get('character')) ? params.get('character') : null
   const real = jobs.filter((j) => !j.id.startsWith('temp-'))
-  const shown = filter === 'all' ? real : real.filter((j) => jobKind(j) === filter)
+  // Type counts follow the character filter, so the chips always describe what you'd see.
+  const byCharacter = characterId ? real.filter((j) => j.character_id === characterId) : real
+  const shown = filter === 'all' ? byCharacter : byCharacter.filter((j) => jobKind(j) === filter)
   const open = openId ? real.find((j) => j.id === openId) : undefined
 
-  const count = (id: 'all' | JobKind) => (id === 'all' ? real.length : real.filter((j) => jobKind(j) === id).length)
+  const count = (id: 'all' | JobKind) => (id === 'all' ? byCharacter.length : byCharacter.filter((j) => jobKind(j) === id).length)
 
   function update(changes: Record<string, string | null>, replace = false, state?: unknown) {
     setParams(
@@ -78,8 +83,35 @@ function Library() {
             ))}
           </div>
 
+          {characters.length > 0 && (
+            <div className="chips" role="group" aria-label="Character">
+              <button
+                type="button"
+                className={`chip${characterId === null ? ' active' : ''}`}
+                aria-pressed={characterId === null}
+                onClick={() => update({ character: null }, true)}
+              >
+                Everyone
+              </button>
+              {characters.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`chip avatar-chip${characterId === c.id ? ' active' : ''}`}
+                  aria-pressed={characterId === c.id}
+                  onClick={() => update({ character: c.id }, true)}
+                >
+                  <img src={c.image_url} alt="" />
+                  {c.name} <span className="chip-count">{real.filter((j) => j.character_id === c.id).length}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {shown.length === 0 && loaded ? (
-            <p className="library-none">{FILTERS.find((f) => f.id === filter)?.empty}</p>
+            <p className="library-none">
+              {characterId ? `Nothing here with ${characters.find((c) => c.id === characterId)?.name} yet.` : FILTERS.find((f) => f.id === filter)?.empty}
+            </p>
           ) : (
             <div className="feed">
               {shown.map((job) => (

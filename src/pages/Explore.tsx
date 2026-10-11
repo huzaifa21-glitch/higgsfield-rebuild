@@ -1,7 +1,10 @@
 import { Link } from 'react-router-dom'
 import EffectCard from '../components/effects/EffectCard.tsx'
+import { useCharacters } from '../lib/charactersContext.ts'
 import { useJobs } from '../lib/jobsContext.ts'
+import { usePhoto } from '../lib/photoContext.ts'
 import { usePresets } from '../lib/usePresets.ts'
+import './Create.css'
 import './Effects.css'
 
 const FIRST_EFFECT = 'film-noir'
@@ -10,6 +13,9 @@ function Explore() {
   const { presets, error } = usePresets()
   const { jobs, loaded } = useJobs()
   const firstRun = loaded && jobs.length === 0
+  const { photo, setPhoto } = usePhoto()
+  const { characters } = useCharacters()
+  const character = photo?.kind === 'character' ? characters.find((c) => c.id === photo.characterId) : undefined
 
   return (
     <div className="explore">
@@ -26,6 +32,21 @@ function Explore() {
             →
           </span>
         </Link>
+      )}
+
+      {character && (
+        <div className="using-character">
+          <img src={character.image_url} alt="" />
+          <span>
+            Effects will use <strong>{character.name}</strong>. Pick any look below.
+          </span>
+          <Link to="/characters" className="ghost-btn">
+            Change
+          </Link>
+          <button type="button" className="icon-btn" onClick={() => setPhoto(null)} aria-label={`Stop using ${character.name}`}>
+            ×
+          </button>
+        </div>
       )}
 
       {error && <p className="field-error">Couldn't load effects. {error}</p>}

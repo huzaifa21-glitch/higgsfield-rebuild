@@ -4,7 +4,7 @@ import { OUTPUTS_BUCKET, db } from './supabase.js'
 
 // Columns safe to send to the browser (never session_id: it's the auth credential).
 export const PUBLIC_JOB_COLUMNS =
-  'id, type, status, preset_id, prompt, enhanced_prompt, input_url, parent_job_id, model, params, cost, output_url, is_demo, error, created_at, completed_at'
+  'id, type, status, preset_id, character_id, prompt, enhanced_prompt, input_url, parent_job_id, model, params, cost, output_url, is_demo, error, created_at, completed_at'
 
 // Must finish (and refund on failure) before the function's maxDuration (60s in vercel.json) kills it,
 // otherwise the job would be stuck "running" with the credits spent.

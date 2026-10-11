@@ -405,3 +405,28 @@
     position: static;
   }
 }
+
+.using-character {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  animation: rise 0.3s var(--ease);
+
+  img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  span {
+    flex: 1;
+    color: var(--muted);
+  }
+  strong {
+    color: var(--text-h);
+  }
+}

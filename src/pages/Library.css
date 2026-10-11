@@ -340,3 +340,14 @@
     overflow: visible;
   }
 }
+
+.avatar-chip {
+  padding-left: 4px;
+
+  img {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+}

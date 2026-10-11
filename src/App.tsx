@@ -1,6 +1,9 @@
+import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { fetchPresets } from './lib/api.ts'
 import { JobsProvider } from './lib/JobsProvider.tsx'
 import { PhotoProvider } from './lib/PhotoProvider.tsx'
+import { CharactersProvider } from './lib/CharactersProvider.tsx'
 import { useJobs } from './lib/jobsContext.ts'
 import './App.css'
 
@@ -26,26 +29,33 @@ function CreditCounter() {
 }
 
 function App() {
+  // Start loading effect names right away: cards on every page label effect outputs with them.
+  useEffect(() => {
+    fetchPresets().catch(() => {})
+  }, [])
+
   return (
     <JobsProvider>
-      <PhotoProvider>
-        <header className="topnav">
-          <NavLink to="/" className="brand">
-            Higgsfield Rebuild
-          </NavLink>
-          <nav aria-label="Main">
-            {navItems.map((item) => (
-              <NavLink key={item.to} to={item.to} end={item.end}>
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-          <CreditCounter />
-        </header>
-        <main>
-          <Outlet />
-        </main>
-      </PhotoProvider>
+      <CharactersProvider>
+        <PhotoProvider>
+          <header className="topnav">
+            <NavLink to="/" className="brand">
+              Higgsfield Rebuild
+            </NavLink>
+            <nav aria-label="Main">
+              {navItems.map((item) => (
+                <NavLink key={item.to} to={item.to} end={item.end}>
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+            <CreditCounter />
+          </header>
+          <main>
+            <Outlet />
+          </main>
+        </PhotoProvider>
+      </CharactersProvider>
     </JobsProvider>
   )
 }

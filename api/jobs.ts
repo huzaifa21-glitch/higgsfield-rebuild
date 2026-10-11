@@ -13,6 +13,8 @@ const DATA_URL_RE = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/
 type Input =
   | { kind: 'upload'; buffer: Buffer; contentType: string }
   | { kind: 'parent'; jobId: string; url: string }
+  // A saved character: its stored photo is the input, so nothing is re-uploaded.
+  | { kind: 'character'; characterId: string; url: string }
 
 type Preset = { id: string; cost: number }
 
@@ -86,7 +88,20 @@ async function validate(body: unknown, sessionId: string): Promise<Validated | s
   }
 
   let input: Input | undefined
-  if (typeof b.input_image === 'string') {
+  if (b.character_id !== undefined && b.character_id !== null) {
+    if (typeof b.character_id !== 'string' || !UUID_RE.test(b.character_id)) return 'character_id must be a UUID'
+    if (type === 'image') return 'character_id needs an effect or video job (the character is the input image)'
+    if (b.input_image !== undefined || b.parent_job_id !== undefined) return 'Send either character_id, input_image or parent_job_id, not several'
+    const { data, error } = await db()
+      .from('characters')
+      .select('id, image_url')
+      .eq('id', b.character_id)
+      .eq('session_id', sessionId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) return 'character_id must be one of your characters'
+    input = { kind: 'character', characterId: data.id, url: data.image_url }
+  } else if (typeof b.input_image === 'string') {
     const match = DATA_URL_RE.exec(b.input_image)
     if (!match) return 'input_image must be a base64 data URL (png, jpeg or webp)'
     const buffer = Buffer.from(match[2], 'base64')
@@ -105,7 +120,7 @@ async function validate(body: unknown, sessionId: string): Promise<Validated | s
       return 'parent_job_id must be one of your finished image or effect jobs'
     input = { kind: 'parent', jobId: data.id, url: data.output_url }
   }
-  if (type !== 'image' && !input) return `${type} jobs need input_image or parent_job_id`
+  if (type !== 'image' && !input) return `${type} jobs need input_image, parent_job_id or character_id`
 
   return { type, prompt, enhancedPrompt, params: preset ? { ...params, ...presetParams } : params, input, preset }
 }
@@ -142,7 +157,7 @@ export const POST = route(async (request) => {
         .upload(path, v.input.buffer, { contentType: v.input.contentType, upsert: false })
       if (error) throw error
       inputUrl = db().storage.from(UPLOADS_BUCKET).getPublicUrl(path).data.publicUrl
-    } else if (v.input?.kind === 'parent') {
+    } else if (v.input?.kind === 'parent' || v.input?.kind === 'character') {
       inputUrl = v.input.url
     }
 
@@ -157,6 +172,7 @@ export const POST = route(async (request) => {
         input_url: inputUrl ?? null,
         parent_job_id: v.input?.kind === 'parent' ? v.input.jobId : null,
         preset_id: v.preset?.id ?? null,
+        character_id: v.input?.kind === 'character' ? v.input.characterId : null,
         model: providerFor(v.type).model,
         params: v.params,
         cost,

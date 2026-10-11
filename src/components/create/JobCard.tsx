@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { downloadUrl, type Job } from '../../lib/api.ts'
 import { friendlyError, jobTitle } from '../../lib/jobText.ts'
 import DemoBadge from '../DemoBadge.tsx'
+import { useCharacters } from '../../lib/charactersContext.ts'
 import { usePresets } from '../../lib/usePresets.ts'
 
 const ASPECT_RATIO: Record<string, string> = { '1:1': '1 / 1', '3:4': '3 / 4', '16:9': '16 / 9' }
@@ -35,6 +36,8 @@ function JobCard({ job, onUseAsReference, onOpen }: Props) {
   const [loaded, setLoaded] = useState(false)
   const { presets } = usePresets()
   const preset = job.preset_id ? presets?.find((p) => p.id === job.preset_id) : undefined
+  const { characters } = useCharacters()
+  const character = job.character_id ? characters.find((c) => c.id === job.character_id) : undefined
   const pending = job.status === 'queued' || job.status === 'running'
   const done = job.status === 'done' && job.output_url
   const took = job.completed_at ? seconds(job.created_at, new Date(job.completed_at).getTime()) : null
@@ -86,6 +89,12 @@ function JobCard({ job, onUseAsReference, onOpen }: Props) {
       </div>
 
       <div className="job-body">
+        {character && (
+          <span className="character-chip">
+            <img src={character.image_url} alt="" />
+            {character.name}
+          </span>
+        )}
         {job.preset_id ? (
           <p className="job-prompt">{preset?.name ?? 'Effect'}</p>
         ) : job.prompt ? (

@@ -11,6 +11,7 @@ export type Job = {
   type: JobType
   status: JobStatus
   preset_id: string | null
+  character_id: string | null
   prompt: string
   enhanced_prompt: string | null
   input_url: string | null
@@ -41,6 +42,35 @@ export type NewJob = {
   parent_job_id?: string
   // Effect preset: the server supplies its prompt, settings and cost.
   preset_id?: string
+  // Saved character: its stored photo becomes the input image.
+  character_id?: string
+}
+
+export type Character = { id: string; name: string; image_url: string; created_at: string }
+
+export type CharacterResult = { ok: true; character: Character } | { ok: false; status: number; error: string }
+
+async function characterCall(url: string, method: string, body?: unknown): Promise<CharacterResult> {
+  const res = await fetch(url, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const data = await res.json().catch(() => ({}))
+  if (res.ok) return { ok: true, character: data.character }
+  return { ok: false, status: res.status, error: data.message ?? data.error ?? `HTTP ${res.status}` }
+}
+
+export async function fetchCharacters() {
+  const res = await fetch('/api/characters')
+  if (!res.ok) throw new Error(`GET /api/characters failed: HTTP ${res.status}`)
+  return (await res.json()) as { characters: Character[]; limit: number }
+}
+export const createCharacter = (name: string, image: string) => characterCall('/api/characters', 'POST', { name, image })
+export const renameCharacter = (id: string, name: string) => characterCall(`/api/characters?id=${id}`, 'PATCH', { name })
+export async function deleteCharacter(id: string) {
+  const res = await fetch(`/api/characters?id=${id}`, { method: 'DELETE' })
+  return res.ok
 }
 
 export type CreateJobResult =

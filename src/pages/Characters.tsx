@@ -1,11 +1,75 @@
-import Placeholder from '../components/Placeholder.tsx'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import CharacterCreator from '../components/characters/CharacterCreator.tsx'
+import { useCharacters } from '../lib/charactersContext.ts'
+import { useJobs } from '../lib/jobsContext.ts'
+import './Create.css'
+import './Characters.css'
 
 function Characters() {
+  const { characters, limit, loaded } = useCharacters()
+  const { jobs } = useJobs()
+  const navigate = useNavigate()
+  const [creating, setCreating] = useState(false)
+  const full = characters.length >= limit
+  const goTo = (id: string) => navigate(`/characters/${id}`)
+
+  if (!loaded) return <div className="characters" aria-busy="true" />
+
+  if (characters.length === 0) {
+    return (
+      <div className="characters-empty">
+        <h1>Save your face once, use it in every effect</h1>
+        <p>Upload one photo and give it a name. Then pick it on any effect or in Create, with no re-uploading. Saving is free.</p>
+        <CharacterCreator onCreated={(c) => goTo(c.id)} uploadLabel="Upload a face photo" />
+      </div>
+    )
+  }
+
   return (
-    <Placeholder
-      title="Characters"
-      description="Save a person or subject once and reuse them across generations."
-    />
+    <div className="characters">
+      <header className="page-head">
+        <h1>Characters</h1>
+        <p>
+          {characters.length} of {limit} saved. Pick one on any effect or in Create.
+        </p>
+      </header>
+
+      <div className="character-grid">
+        {characters.map((c) => {
+          const made = jobs.filter((j) => j.character_id === c.id).length
+          return (
+            <Link key={c.id} to={`/characters/${c.id}`} className="character-card">
+              <img src={c.image_url} alt="" />
+              <span className="character-name">{c.name}</span>
+              <span className="character-meta">{made === 0 ? 'Nothing made yet' : `${made} ${made === 1 ? 'creation' : 'creations'}`}</span>
+            </Link>
+          )
+        })}
+
+        {creating ? (
+          <div className="character-card new open">
+            <CharacterCreator onCreated={(c) => goTo(c.id)} onCancel={() => setCreating(false)} />
+          </div>
+        ) : full ? (
+          <div className="character-card new full" role="note">
+            <span className="new-plus" aria-hidden="true">
+              {characters.length}/{limit}
+            </span>
+            <span className="character-name">All slots used</span>
+            <span className="character-meta">A guest session can save {limit} characters. Delete one to add another.</span>
+          </div>
+        ) : (
+          <button type="button" className="character-card new" onClick={() => setCreating(true)}>
+            <span className="new-plus" aria-hidden="true">
+              +
+            </span>
+            <span className="character-name">New character</span>
+            <span className="character-meta">Free · {limit - characters.length} left</span>
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 

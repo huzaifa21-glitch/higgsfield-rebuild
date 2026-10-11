@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { downloadUrl, type Job } from '../../lib/api.ts'
 import { useJobs } from '../../lib/jobsContext.ts'
 import { friendlyError, generationSeconds, jobKind, jobTitle, modelName } from '../../lib/jobText.ts'
+import { useCharacters } from '../../lib/charactersContext.ts'
 import { usePhoto } from '../../lib/photoContext.ts'
 import { urlToDataUrl, type CreatePrefill } from '../../lib/prefill.ts'
 import { usePresets } from '../../lib/usePresets.ts'
@@ -23,6 +24,11 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
   const { jobs, credits: balance, costs, createJob } = useJobs()
   const { presets } = usePresets()
   const { setPhoto } = usePhoto()
+  const { characters } = useCharacters()
+  const character = job.character_id ? characters.find((c) => c.id === job.character_id) : undefined
+  const characterRef: Reference | null = character
+    ? { kind: 'character', characterId: character.id, url: character.image_url, name: character.name }
+    : null
   const [busy, setBusy] = useState<'remix' | 'animate' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -47,13 +53,15 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
     try {
       if (job.preset_id) {
         // Effects: the same preset on the same photo; the user confirms with "Apply effect".
-        if (job.input_url) setPhoto({ dataUrl: await urlToDataUrl(job.input_url), name: 'Photo from your library' })
+        if (characterRef) setPhoto(characterRef)
+        else if (job.input_url) setPhoto({ kind: 'upload', dataUrl: await urlToDataUrl(job.input_url), name: 'Photo from your library' })
         navigate(`/effects/${job.preset_id}`)
         return
       }
-      let reference: Reference | null = null
-      if (job.parent_job_id && job.input_url) reference = { kind: 'job', jobId: job.parent_job_id, url: job.input_url }
-      else if (job.input_url) reference = { kind: 'upload', dataUrl: await urlToDataUrl(job.input_url), name: 'Original reference' }
+      // Prefer the character (the remix keeps character_id), then the parent output, then the original upload.
+      let reference: Reference | null = characterRef
+      if (!reference && job.parent_job_id && job.input_url) reference = { kind: 'job', jobId: job.parent_job_id, url: job.input_url }
+      else if (!reference && job.input_url) reference = { kind: 'upload', dataUrl: await urlToDataUrl(job.input_url), name: 'Original reference' }
       const prefill: CreatePrefill = {
         mode: job.type === 'video' ? 'video' : 'image',
         prompt: job.prompt,
@@ -147,7 +155,18 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
               <dd>{v}</dd>
             </div>
           ))}
-          {job.input_url && !job.parent_job_id && (
+          {character && (
+            <div>
+              <dt>Character</dt>
+              <dd>
+                <Link to={`/characters/${character.id}`} className="character-chip link">
+                  <img src={character.image_url} alt="" />
+                  {character.name}
+                </Link>
+              </dd>
+            </div>
+          )}
+          {job.input_url && !job.parent_job_id && !character && (
             <div>
               <dt>{job.preset_id ? 'Input photo' : 'Reference image'}</dt>
               <dd>

@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom'
 import JobCard from '../components/create/JobCard.tsx'
 import ReferenceInput, { type Reference } from '../components/create/ReferenceInput.tsx'
 import { ASPECTS, requestAssist, type Aspect, type AssistResult, type Job, type JobType } from '../lib/api.ts'
+import CharacterPicker from '../components/characters/CharacterPicker.tsx'
+import { useCharacters } from '../lib/charactersContext.ts'
 import { useJobs } from '../lib/jobsContext.ts'
 import type { CreatePrefill } from '../lib/prefill.ts'
 import './Create.css'
@@ -37,6 +39,7 @@ function AspectIcon({ aspect }: { aspect: Aspect }) {
 
 function Create() {
   const { jobs, credits: balance, costs, createJob } = useJobs()
+  const { characters } = useCharacters()
   // Remix / Use as reference from the Library arrive as router state with the exact settings to restore.
   const prefill = (useLocation().state as { prefill?: CreatePrefill } | null)?.prefill
   const [mode, setMode] = useState<Mode>(prefill?.mode ?? 'image')
@@ -113,6 +116,7 @@ function Create() {
       params: mode === 'image' ? { aspect } : undefined,
       input_image: reference?.kind === 'upload' ? reference.dataUrl : undefined,
       parent_job_id: reference?.kind === 'job' ? reference.jobId : undefined,
+      character_id: reference?.kind === 'character' ? reference.characterId : undefined,
     })
     if (!result.ok) {
       setMessage(
@@ -277,6 +281,12 @@ function Create() {
             {mode === 'video' ? 'Image to animate' : 'Reference image'}
             {mode === 'image' && <span className="optional">optional</span>}
           </span>
+          <CharacterPicker
+            characters={characters}
+            selectedId={reference?.kind === 'character' ? reference.characterId : null}
+            onPick={(c) => setReference({ kind: 'character', characterId: c.id, url: c.image_url, name: c.name })}
+            label="Use a character"
+          />
           <ReferenceInput
             value={reference}
             onChange={setReference}

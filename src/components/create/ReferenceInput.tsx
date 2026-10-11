@@ -4,6 +4,7 @@ import { fileToDataUrl } from '../../lib/api.ts'
 export type Reference =
   | { kind: 'upload'; dataUrl: string; name: string }
   | { kind: 'job'; jobId: string; url: string }
+  | { kind: 'character'; characterId: string; url: string; name: string }
 
 type Props = {
   value: Reference | null
@@ -44,12 +45,13 @@ function ReferenceInput({ value, onChange, label }: Props) {
 
   if (value) {
     const src = value.kind === 'upload' ? value.dataUrl : value.url
+    const detail = value.kind === 'upload' ? value.name : value.kind === 'character' ? 'Character' : 'From your results'
     return (
       <div className="ref-preview">
         <img src={src} alt="Reference" />
         <div className="ref-meta">
-          <span>{label}</span>
-          <small>{value.kind === 'upload' ? value.name : 'From your results'}</small>
+          <span>{value.kind === 'character' ? value.name : label}</span>
+          <small>{detail}</small>
         </div>
         <button type="button" className="icon-btn" onClick={() => onChange(null)} aria-label="Remove reference image">
           ×

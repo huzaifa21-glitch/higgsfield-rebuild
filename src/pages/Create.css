@@ -636,3 +636,135 @@
   font-size: 12px;
   color: var(--muted);
 }
+
+/* ---------- Characters: shared controls ---------- */
+
+.character-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.avatar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.avatar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  max-width: 100%;
+  transition:
+    border-color 0.15s var(--ease),
+    background 0.15s var(--ease);
+
+  img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &:hover {
+    border-color: var(--border-strong);
+  }
+  &.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text-h);
+  }
+}
+
+.avatar-manage {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 4px 6px;
+
+  &:hover {
+    color: var(--text);
+  }
+}
+
+.save-character {
+  display: grid;
+  gap: 8px;
+  animation: rise 0.2s var(--ease);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+
+  input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+  }
+}
+
+.text-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s var(--ease);
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+}
+
+.danger-btn {
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 107, 122, 0.5);
+  border-radius: 999px;
+  background: rgba(255, 107, 122, 0.12);
+  color: var(--danger);
+  font-size: 13px;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 107, 122, 0.2);
+  }
+}
+
+.character-chip {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 2px 2px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  text-decoration: none;
+
+  img {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  &.link:hover {
+    color: var(--text-h);
+    background: var(--border);
+  }
+}

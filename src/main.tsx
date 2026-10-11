@@ -6,6 +6,7 @@ import App from './App.tsx'
 import Explore from './pages/Explore.tsx'
 import Create from './pages/Create.tsx'
 import Characters from './pages/Characters.tsx'
+import CharacterDetail from './pages/CharacterDetail.tsx'
 import Library from './pages/Library.tsx'
 import NotFound from './pages/NotFound.tsx'
 import Dev from './pages/Dev.tsx'
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
       { path: 'create', element: <Create /> },
       { path: 'effects/:id', element: <Effect /> },
       { path: 'characters', element: <Characters /> },
+      { path: 'characters/:id', element: <CharacterDetail /> },
       { path: 'library', element: <Library /> },
       { path: 'dev', element: <Dev /> },
       { path: '*', element: <NotFound /> },
