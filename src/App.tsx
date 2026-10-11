@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import SiteBanners from './components/SiteBanners.tsx'
 import { fetchPresets } from './lib/api.ts'
 import { JobsProvider } from './lib/JobsProvider.tsx'
 import { PhotoProvider } from './lib/PhotoProvider.tsx'
@@ -51,6 +52,7 @@ function App() {
             </nav>
             <CreditCounter />
           </header>
+          <SiteBanners />
           <main>
             <Outlet />
           </main>

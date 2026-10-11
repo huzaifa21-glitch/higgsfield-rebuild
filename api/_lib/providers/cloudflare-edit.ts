@@ -1,5 +1,6 @@
 import sharp from 'sharp'
 import { runModel, sniffImageType } from '../cloudflare.js'
+import { JobError } from '../errors.js'
 import { ASPECT_SIZES, type Provider } from './types.js'
 
 const MODEL = '@cf/black-forest-labs/flux-2-klein-4b'
@@ -14,9 +15,11 @@ const MAX_INPUT_SIDE = 512
 export const cloudflareEdit: Provider = {
   model: MODEL,
   async generate(job) {
-    if (!job.inputUrl) throw new Error('Effect jobs need an input image')
-    const res = await fetch(job.inputUrl, { signal: AbortSignal.timeout(15_000) })
-    if (!res.ok) throw new Error(`Could not fetch input image: HTTP ${res.status}`)
+    if (!job.inputUrl) throw new JobError('invalid_input', 'Effect jobs need an input image')
+    const res = await fetch(job.inputUrl, { signal: AbortSignal.timeout(15_000) }).catch((err: unknown) => {
+      throw new JobError('provider_error', `Could not fetch input image: ${String(err)}`)
+    })
+    if (!res.ok) throw new JobError('invalid_input', `Could not fetch input image: HTTP ${res.status}`)
 
     // rotate() applies EXIF orientation so phone portraits aren't sent sideways.
     const input = await sharp(Buffer.from(await res.arrayBuffer()))
@@ -24,6 +27,9 @@ export const cloudflareEdit: Provider = {
       .resize({ width: MAX_INPUT_SIDE, height: MAX_INPUT_SIDE, fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 90 })
       .toBuffer()
+      .catch((err: unknown) => {
+        throw new JobError('invalid_input', `Unreadable input image: ${String(err)}`)
+      })
 
     const { width, height } = ASPECT_SIZES[job.params.aspect ?? '3:4']
     const form = new FormData()

@@ -25,6 +25,8 @@ export type ProviderJob = {
   prompt: string
   params: JobParams
   inputUrl?: string
+  // Effect preset, so the demo fallback can show that effect's preview.
+  presetId?: string
 }
 
 // Either bytes for the pipeline to upload, or a URL that is already hosted.

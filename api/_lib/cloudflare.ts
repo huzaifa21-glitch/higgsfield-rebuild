@@ -1,21 +1,55 @@
 import './env.js'
+import { JobError, type JobErrorCode } from './errors.js'
+
+// Workers AI internal error codes (developers.cloudflare.com/workers-ai/platform/errors).
+const CODE_MAP: Record<number, JobErrorCode> = {
+  3030: 'safety_filter',
+  3036: 'quota',
+  3040: 'capacity',
+  3007: 'timeout',
+  3008: 'timeout',
+  5006: 'invalid_input',
+  5004: 'invalid_input',
+  3003: 'invalid_input',
+  3006: 'invalid_input',
+}
+
+export function classify(status: number, body: string): JobErrorCode {
+  try {
+    const errors = (JSON.parse(body) as { errors?: { code?: number }[] }).errors ?? []
+    for (const e of errors) if (e.code && CODE_MAP[e.code]) return CODE_MAP[e.code]
+  } catch {
+    // Not JSON: fall through to the status code.
+  }
+  if (status === 429) return 'capacity'
+  if (status === 408 || status === 504) return 'timeout'
+  return 'provider_error'
+}
 
 // Thin client for the Workers AI REST API. Pass FormData without a content type so fetch adds the boundary.
+// Throws JobError with a code the pipeline and UI understand.
 export async function runModel<T>(model: string, body: string | FormData, contentType?: string, timeoutMs = 40_000): Promise<T> {
   const accountId = process.env.CF_ACCOUNT_ID
   const token = process.env.CF_API_TOKEN
-  if (!accountId || !token) throw new Error('Missing CF_ACCOUNT_ID or CF_API_TOKEN')
+  if (!accountId || !token) throw new JobError('provider_error', 'Missing CF_ACCOUNT_ID or CF_API_TOKEN')
 
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
   if (contentType) headers['Content-Type'] = contentType
-  const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`, {
-    method: 'POST',
-    headers,
-    body,
-    signal: AbortSignal.timeout(timeoutMs),
-  })
+  let res: Response
+  try {
+    res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`, {
+      method: 'POST',
+      headers,
+      body,
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+  } catch (err) {
+    const name = err instanceof Error ? err.name : ''
+    if (name === 'TimeoutError' || name === 'AbortError') throw new JobError('timeout', `${model} timed out after ${timeoutMs}ms`)
+    throw new JobError('provider_error', `${model} request failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
   const text = await res.text()
-  if (!res.ok) throw new Error(`${model} returned HTTP ${res.status}: ${text.slice(0, 300)}`)
+  if (!res.ok) throw new JobError(classify(res.status, text), `${model} returned HTTP ${res.status}: ${text.slice(0, 300)}`)
   return (JSON.parse(text) as { result: T }).result
 }
 

@@ -13,6 +13,8 @@ type Props = {
 }
 
 const ACCEPT = ['image/png', 'image/jpeg', 'image/webp']
+// Checked before the in-browser resize; the server re-checks type and size.
+const MAX_BYTES = 8 * 1024 * 1024
 
 function ReferenceInput({ value, onChange, label }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -24,7 +26,11 @@ function ReferenceInput({ value, onChange, label }: Props) {
     setError(null)
     if (!file) return
     if (!ACCEPT.includes(file.type)) {
-      setError('Use a PNG, JPEG or WebP image.')
+      setError('Use a JPEG, PNG or WebP image.')
+      return
+    }
+    if (file.size > MAX_BYTES) {
+      setError(`That image is ${(file.size / 1024 / 1024).toFixed(1)}MB. The limit is 8MB.`)
       return
     }
     setBusy(true)

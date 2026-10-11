@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { downloadUrl, type Job } from '../../lib/api.ts'
 import { useJobs } from '../../lib/jobsContext.ts'
-import { friendlyError, generationSeconds, jobKind, jobTitle, modelName } from '../../lib/jobText.ts'
+import { describeCreateError, friendlyError, generationSeconds, jobKind, jobTitle, modelName } from '../../lib/jobText.ts'
+import { useCooldown } from '../../lib/useCooldown.ts'
 import { useCharacters } from '../../lib/charactersContext.ts'
 import { usePhoto } from '../../lib/photoContext.ts'
 import { urlToDataUrl, type CreatePrefill } from '../../lib/prefill.ts'
@@ -22,6 +23,7 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const navigate = useNavigate()
   const { jobs, credits: balance, costs, createJob } = useJobs()
+  const cooldown = useCooldown()
   const { presets } = usePresets()
   const { setPhoto } = usePhoto()
   const { characters } = useCharacters()
@@ -71,19 +73,20 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
       }
       navigate('/create', { state: { prefill } })
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : String(err))
+      console.error('remix failed', err)
+      setMessage("Couldn't load the original photo for this remix. Try again.")
       setBusy(null)
     }
   }
 
   async function animate() {
-    if (!canAnimate) return
+    if (!canAnimate || cooldown > 0) return
     setBusy('animate')
     setMessage(null)
     const result = await createJob({ type: 'video', prompt: '', parent_job_id: job.id })
     setBusy(null)
     if (result.ok) onOpenJob(result.job.id)
-    else setMessage(result.status === 402 ? `That needs ${credits(result.cost ?? videoCost)} and you have ${result.credits ?? 0}.` : result.error)
+    else setMessage(describeCreateError(result))
   }
 
   function sendToCreateAsReference() {
@@ -95,7 +98,7 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
     ...(job.prompt && !job.preset_id ? [['Prompt', job.prompt] as [string, React.ReactNode]] : []),
     ...(job.enhanced_prompt ? [['Enhanced prompt', job.enhanced_prompt] as [string, React.ReactNode]] : []),
     ['Model', <span title={job.model}>{modelName(job.model)}</span>],
-    ['Cost', credits(job.cost)],
+    ['Cost', job.refunded ? `${credits(job.cost)} (refunded)` : credits(job.cost)],
     ['Generation time', took !== null && job.status === 'done' ? `${took.toFixed(1)}s` : pending ? 'In progress' : '—'],
     ['Created', new Date(job.created_at).toLocaleString()],
   ]
@@ -116,16 +119,16 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
             <img className={loaded ? 'loaded' : ''} src={job.output_url!} alt={jobTitle(job, preset?.name)} onLoad={() => setLoaded(true)} />
           )
         ) : job.status === 'failed' ? (
-          <div className="detail-state failed" title={job.error ?? undefined}>
+          <div className="detail-state failed">
             <p>{friendlyError(job.error)}</p>
-            {job.cost > 0 && <p className="refund">Credits refunded.</p>}
+            {job.refunded !== false && job.cost > 0 && <p className="refund">Credits refunded.</p>}
           </div>
         ) : (
           <div className="detail-state shimmer">
             <span className="skeleton-label">{job.type === 'video' ? 'Animating…' : 'Generating…'}</span>
           </div>
         )}
-        {job.is_demo && <DemoBadge />}
+        {job.is_demo && <DemoBadge kind={job.type === 'video' ? 'video' : 'image'} />}
       </div>
 
       <div className="detail-side">
@@ -181,8 +184,10 @@ function JobDetail({ job, onClose, onOpenJob }: Props) {
             {busy === 'remix' ? 'Opening…' : 'Remix'}
           </button>
           {done && isImage && (
-            <button type="button" className="ghost-btn" onClick={animate} disabled={busy !== null || !canAnimate}>
-              {busy === 'animate'
+            <button type="button" className="ghost-btn" onClick={animate} disabled={busy !== null || !canAnimate || cooldown > 0}>
+              {cooldown > 0
+                ? `Slow down · ${cooldown}s`
+                : busy === 'animate'
                 ? 'Starting…'
                 : canAnimate || balance === null
                   ? `Animate · ${credits(videoCost)}`

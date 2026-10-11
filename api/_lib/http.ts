@@ -1,5 +1,5 @@
-export function json(body: unknown, status = 200, setCookie?: string) {
-  const headers = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+export function json(body: unknown, status = 200, setCookie?: string, extraHeaders?: Record<string, string>) {
+  const headers = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...extraHeaders })
   if (setCookie) headers.append('Set-Cookie', setCookie)
   return new Response(JSON.stringify(body), { status, headers })
 }

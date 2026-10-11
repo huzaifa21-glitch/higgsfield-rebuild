@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { fetchJobs, fetchSession, postJob, type CreateJobResult, type Job, type JobType, type NewJob } from './api.ts'
+import {
+  fetchJobs,
+  fetchSession,
+  fetchStatus,
+  postJob,
+  type CreateJobResult,
+  type Job,
+  type JobType,
+  type NewJob,
+  type SiteStatus,
+} from './api.ts'
 import { JobsContext } from './jobsContext.ts'
 import { supabase } from './supabase.ts'
 
@@ -17,6 +27,23 @@ export function JobsProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [live, setLive] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [starterWithheld, setStarterWithheld] = useState(false)
+  const [degraded, setDegraded] = useState<SiteStatus['degraded']>(null)
+  // Set from a 429's retry_after; generate buttons count down until it passes.
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null)
+
+  const refreshStatus = useCallback(() => {
+    fetchStatus()
+      .then((s) => setDegraded(s.degraded))
+      .catch(() => {})
+  }, [])
+
+  // Degraded mode can start at any time, so check now, every minute, and whenever a demo fallback arrives.
+  useEffect(() => {
+    refreshStatus()
+    const id = setInterval(refreshStatus, 60_000)
+    return () => clearInterval(id)
+  }, [refreshStatus])
 
   useEffect(() => {
     let cancelled = false
@@ -27,11 +54,16 @@ export function JobsProvider({ children }: { children: ReactNode }) {
         if (cancelled) return
         setCredits(session.credits)
         setCosts(session.costs)
+        setStarterWithheld(Boolean(session.starterWithheld))
 
         // Subscribe before the first fetch so no update falls in the gap.
         channel = supabase
           .channel(`jobs:${session.realtimeKey}`)
-          .on('broadcast', { event: 'job' }, ({ payload }) => setJobs((prev) => upsert(prev, payload as Job)))
+          .on('broadcast', { event: 'job' }, ({ payload }) => {
+            const job = payload as Job
+            setJobs((prev) => upsert(prev, job))
+            if (job.status === 'done' && job.is_demo && job.type !== 'video') refreshStatus()
+          })
           .on('broadcast', { event: 'credits' }, ({ payload }) => setCredits((payload as { credits: number }).credits))
           .subscribe((status) => setLive(status === 'SUBSCRIBED'))
 
@@ -47,7 +79,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       cancelled = true
       if (channel) supabase.removeChannel(channel)
     }
-  }, [])
+  }, [refreshStatus])
 
   // Fallback if Realtime is down: poll while anything is still in flight, so cards never hang.
   const pending = jobs.some((j) => !j.id.startsWith('temp-') && (j.status === 'queued' || j.status === 'running'))
@@ -81,6 +113,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
         cost,
         output_url: null,
         is_demo: false,
+        refunded: false,
         error: null,
         created_at: new Date().toISOString(),
         completed_at: null,
@@ -99,15 +132,23 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       })
       if (result.ok) setCredits(result.credits)
       else if (result.credits !== undefined) setCredits(result.credits)
+      if (!result.ok && result.status === 429) setCooldownUntil(Date.now() + (result.retryAfter ?? 10) * 1000)
       else setCredits((c) => (c === null ? c : c + cost))
       return result
     },
     [costs],
   )
 
+  // The cooldown clears itself once it has passed.
+  useEffect(() => {
+    if (!cooldownUntil) return
+    const id = setTimeout(() => setCooldownUntil(null), Math.max(0, cooldownUntil - Date.now()))
+    return () => clearTimeout(id)
+  }, [cooldownUntil])
+
   const value = useMemo(
-    () => ({ jobs, loaded, credits, costs, error, live, createJob }),
-    [jobs, loaded, credits, costs, error, live, createJob],
+    () => ({ jobs, loaded, credits, costs, error, live, createJob, starterWithheld, degraded, cooldownUntil }),
+    [jobs, loaded, credits, costs, error, live, createJob, starterWithheld, degraded, cooldownUntil],
   )
   return <JobsContext.Provider value={value}>{children}</JobsContext.Provider>
 }

@@ -5,7 +5,8 @@ import ReferenceInput, { type Reference } from '../components/create/ReferenceIn
 import BeforeAfter from '../components/effects/BeforeAfter.tsx'
 import { downloadUrl, type Preset } from '../lib/api.ts'
 import { useJobs } from '../lib/jobsContext.ts'
-import { friendlyError } from '../lib/jobText.ts'
+import { describeCreateError, friendlyError } from '../lib/jobText.ts'
+import { useCooldown } from '../lib/useCooldown.ts'
 import { useCharacters } from '../lib/charactersContext.ts'
 import { usePhoto } from '../lib/photoContext.ts'
 import { usePresets } from '../lib/usePresets.ts'
@@ -25,6 +26,7 @@ function Elapsed({ since }: { since: number }) {
 
 function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
   const { jobs, credits: balance, costs, createJob } = useJobs()
+  const cooldown = useCooldown()
   const { photo: sessionPhoto, setPhoto } = usePhoto()
   const { characters, limit, loaded: charactersLoaded, create: createCharacter } = useCharacters()
   // A character deleted since it was picked no longer counts as the photo.
@@ -48,7 +50,7 @@ function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
   const imageCost = costs?.image ?? 1
 
   async function apply() {
-    if (!photo || !canAfford || pending) return
+    if (!photo || !canAfford || pending || cooldown > 0) return
     setMessage(null)
     setJobId(null)
     setStartedAt(Date.now())
@@ -76,9 +78,7 @@ function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
       setJobId(result.job.id)
     } else {
       setStartedAt(null)
-      setMessage(
-        result.status === 402 ? `That needs ${credits(result.cost ?? preset.cost)} and you have ${result.credits ?? 0}.` : result.error,
-      )
+      setMessage(describeCreateError(result))
     }
   }
 
@@ -102,7 +102,7 @@ function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
                   </span>
                 </div>
               ) : job?.status === 'failed' ? (
-                <div className="stage-overlay failed" title={job.error ?? undefined}>
+                <div className="stage-overlay failed">
                   <p>{friendlyError(job.error)}</p>
                   <p className="refund">Credits refunded.</p>
                 </div>
@@ -155,8 +155,10 @@ function EffectView({ preset, others }: { preset: Preset; others: Preset[] }) {
         </div>
 
         <div className="generate">
-          <button type="button" className={`primary${known && !canAfford ? ' short' : ''}`} onClick={apply} disabled={!photo || !canAfford || pending}>
-            {known && !canAfford
+          <button type="button" className={`primary${known && !canAfford ? ' short' : ''}`} onClick={apply} disabled={!photo || !canAfford || pending || cooldown > 0}>
+            {cooldown > 0
+              ? `Slow down · try again in ${cooldown}s`
+              : known && !canAfford
               ? `Need ${credits(preset.cost)} · you have ${balance}`
               : pending
                 ? 'Applying…'

@@ -1,14 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
 import { json, route, UUID_RE } from './_lib/http.js'
+import { parseImageDataUrl } from './_lib/images.js'
 import { getSession } from './_lib/session.js'
 import { db, UPLOADS_BUCKET } from './_lib/supabase.js'
 
 // Saved faces for the session. Free to create; capped per guest session.
 const LIMIT = 3
 const MAX_NAME = 40
-const MAX_IMAGE_BYTES = 3 * 1024 * 1024
-const DATA_URL_RE = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/
 const COLUMNS = 'id, name, image_url, created_at'
 
 function readName(value: unknown): string | null {
@@ -39,11 +38,10 @@ export const POST = route(async (request) => {
   const { session, setCookie } = await getSession(request)
   const body = (await request.json().catch(() => null)) as { name?: unknown; image?: unknown } | null
   const name = readName(body?.name)
-  if (!name) return json({ error: `Name must be 1-${MAX_NAME} characters` }, 400, setCookie)
-  const match = typeof body?.image === 'string' ? DATA_URL_RE.exec(body.image) : null
-  if (!match) return json({ error: 'image must be a base64 data URL (png, jpeg or webp)' }, 400, setCookie)
-  const raw = Buffer.from(match[1], 'base64')
-  if (raw.length > MAX_IMAGE_BYTES) return json({ error: 'image must be at most 3MB' }, 400, setCookie)
+  if (!name) return json({ error: `Give your character a name (up to ${MAX_NAME} characters).`, code: 'invalid_input' }, 400, setCookie)
+  const parsed = await parseImageDataUrl(body?.image)
+  if (typeof parsed === 'string') return json({ error: parsed, code: 'invalid_input' }, 400, setCookie)
+  const raw = parsed.buffer
 
   const { count, error: countError } = await db()
     .from('characters')
@@ -84,7 +82,7 @@ export const PATCH = route(async (request) => {
   if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400, setCookie)
   const body = (await request.json().catch(() => null)) as { name?: unknown } | null
   const name = readName(body?.name)
-  if (!name) return json({ error: `Name must be 1-${MAX_NAME} characters` }, 400, setCookie)
+  if (!name) return json({ error: `Give your character a name (up to ${MAX_NAME} characters).`, code: 'invalid_input' }, 400, setCookie)
 
   const { data, error } = await db()
     .from('characters')

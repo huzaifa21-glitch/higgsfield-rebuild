@@ -21,6 +21,9 @@ export type Job = {
   cost: number
   output_url: string | null
   is_demo: boolean
+  // Cost given back: failures, and demo fallbacks while AI capacity is out.
+  refunded: boolean
+  // An error code from the server (see jobText.friendlyError), never a raw provider message.
   error: string | null
   created_at: string
   completed_at: string | null
@@ -30,6 +33,16 @@ export type SessionInfo = {
   credits: number
   realtimeKey: string
   costs: Record<JobType, number>
+  // This network already started 3 sessions today, so this one began with 0 credits.
+  starterWithheld?: boolean
+}
+
+export type SiteStatus = { degraded: { until: string; reason: 'quota' | 'capacity' } | null }
+
+export async function fetchStatus(): Promise<SiteStatus> {
+  const res = await fetch('/api/status')
+  if (!res.ok) return { degraded: null }
+  return (await res.json()) as SiteStatus
 }
 
 export type NewJob = {
@@ -75,7 +88,7 @@ export async function deleteCharacter(id: string) {
 
 export type CreateJobResult =
   | { ok: true; job: Job; credits: number }
-  | { ok: false; status: number; error: string; credits?: number; cost?: number }
+  | { ok: false; status: number; error: string; code?: string; message?: string; retryAfter?: number; credits?: number; cost?: number }
 
 export type AssistResult = {
   prompt: string
@@ -131,7 +144,16 @@ export async function postJob(input: NewJob): Promise<CreateJobResult> {
   })
   const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
   if (res.status === 202) return { ok: true, job: body.job, credits: body.credits }
-  return { ok: false, status: res.status, error: body.error ?? `HTTP ${res.status}`, credits: body.credits, cost: body.cost }
+  return {
+    ok: false,
+    status: res.status,
+    error: body.error ?? `HTTP ${res.status}`,
+    code: body.code,
+    message: body.message,
+    retryAfter: body.retry_after,
+    credits: body.credits,
+    cost: body.cost,
+  }
 }
 
 export async function requestAssist(prompt: string, mode: 'image' | 'video' = 'image'): Promise<AssistResult> {

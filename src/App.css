@@ -175,3 +175,54 @@ main {
     border-radius: 6px;
   }
 }
+
+/* Site-wide notices under the nav */
+.site-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  animation: banner-in 0.3s var(--ease);
+
+  p {
+    flex: 1;
+    color: var(--text-h);
+  }
+  .muted {
+    color: var(--muted);
+  }
+  &.degraded {
+    background: linear-gradient(90deg, rgba(255, 184, 77, 0.14), transparent 70%);
+    border-bottom-color: rgba(255, 184, 77, 0.35);
+  }
+  &.notice {
+    background: var(--surface);
+  }
+  .icon-btn {
+    flex-shrink: 0;
+  }
+}
+
+.site-banner-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #ffb84d;
+  box-shadow: 0 0 10px #ffb84d;
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (max-width: 640px) {
+  .site-banner {
+    padding: 10px 16px;
+  }
+}

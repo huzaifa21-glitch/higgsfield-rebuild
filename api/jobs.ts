@@ -1,14 +1,16 @@
 import { randomUUID } from 'node:crypto'
 import { waitUntil } from '@vercel/functions'
 import { json, route, UUID_RE } from './_lib/http.js'
-import { PUBLIC_JOB_COLUMNS, runJob } from './_lib/pipeline.js'
+import { parseImageDataUrl } from './_lib/images.js'
+import { PUBLIC_JOB_COLUMNS, runJob, sweepStuckJobs } from './_lib/pipeline.js'
 import { COSTS, isAspect, providerFor, type JobParams, type JobType } from './_lib/providers/index.js'
-import { getSession } from './_lib/session.js'
+import { rateLimit } from './_lib/ratelimit.js'
+import { getSession, ipHash } from './_lib/session.js'
 import { db, UPLOADS_BUCKET } from './_lib/supabase.js'
 
 const MAX_PROMPT = 1000
-const MAX_INPUT_BYTES = 3 * 1024 * 1024 // Vercel caps request bodies at 4.5MB; base64 adds a third.
-const DATA_URL_RE = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/
+// Rate limit on job creation, per client IP (hashed).
+const JOBS_PER_MINUTE = 6
 
 type Input =
   | { kind: 'upload'; buffer: Buffer; contentType: string }
@@ -59,8 +61,8 @@ async function validate(body: unknown, sessionId: string): Promise<Validated | s
   }
 
   const prompt = presetPrompt ?? (typeof b.prompt === 'string' ? b.prompt.trim() : '')
-  if (type !== 'video' && !prompt) return 'prompt is required'
-  if (prompt.length > MAX_PROMPT) return `prompt must be at most ${MAX_PROMPT} characters`
+  if (type !== 'video' && !prompt) return 'Write a prompt first.'
+  if (prompt.length > MAX_PROMPT) return `Prompts can be up to ${MAX_PROMPT} characters.`
 
   // The Prompt Assist rewrite the user explicitly chose with Use. Generation runs on it; prompt keeps what they typed.
   let enhancedPrompt: string | null = null
@@ -102,11 +104,9 @@ async function validate(body: unknown, sessionId: string): Promise<Validated | s
     if (!data) return 'character_id must be one of your characters'
     input = { kind: 'character', characterId: data.id, url: data.image_url }
   } else if (typeof b.input_image === 'string') {
-    const match = DATA_URL_RE.exec(b.input_image)
-    if (!match) return 'input_image must be a base64 data URL (png, jpeg or webp)'
-    const buffer = Buffer.from(match[2], 'base64')
-    if (buffer.length > MAX_INPUT_BYTES) return 'input_image must be at most 3MB'
-    input = { kind: 'upload', buffer, contentType: match[1] }
+    const parsed = await parseImageDataUrl(b.input_image)
+    if (typeof parsed === 'string') return parsed
+    input = { kind: 'upload', ...parsed }
   } else if (typeof b.parent_job_id === 'string') {
     if (!UUID_RE.test(b.parent_job_id)) return 'parent_job_id must be a UUID'
     const { data, error } = await db()
@@ -128,14 +128,25 @@ async function validate(body: unknown, sessionId: string): Promise<Validated | s
 export const POST = route(async (request) => {
   const { session, setCookie } = await getSession(request)
 
+  // Checked before anything else (including validation) so a flood can't reach the database or the models.
+  const limit = await rateLimit(`jobs:${ipHash(request)}`, 60, JOBS_PER_MINUTE)
+  if (!limit.ok) {
+    return json(
+      { error: 'rate_limited', code: 'rate_limited', message: "You're going a bit fast. Give it a few seconds and try again.", retry_after: limit.retryAfter },
+      429,
+      setCookie,
+      { 'Retry-After': String(limit.retryAfter) },
+    )
+  }
+
   let body: unknown
   try {
     body = await request.json()
   } catch {
-    return json({ error: 'Body must be valid JSON' }, 400, setCookie)
+    return json({ error: 'Body must be valid JSON', code: 'invalid_input' }, 400, setCookie)
   }
   const v = await validate(body, session.id)
-  if (typeof v === 'string') return json({ error: v }, 400, setCookie)
+  if (typeof v === 'string') return json({ error: v, code: 'invalid_input' }, 400, setCookie)
 
   const cost = v.preset?.cost ?? COSTS[v.type]
   const { data: balance, error: spendError } = await db().rpc('spend_credits', { p_session_id: session.id, p_cost: cost })
@@ -182,17 +193,18 @@ export const POST = route(async (request) => {
       .single()
     if (error) throw error
 
-    waitUntil(runJob({ id: jobId, type: v.type, prompt: v.enhancedPrompt ?? v.prompt, params: v.params, inputUrl }))
+    waitUntil(runJob({ id: jobId, type: v.type, prompt: v.enhancedPrompt ?? v.prompt, params: v.params, inputUrl, presetId: v.preset?.id }))
     return json({ job, credits: balance }, 202, setCookie)
   } catch (err) {
     console.error('job setup failed', err)
     await db().rpc('refund_credits', { p_session_id: session.id, p_amount: cost })
-    return json({ error: 'Could not start the job; your credits were refunded' }, 500, setCookie)
+    return json({ error: "Something went wrong starting that. Your credits weren't spent.", code: 'provider_error' }, 500, setCookie)
   }
 })
 
 export const GET = route(async (request) => {
   const { session, setCookie } = await getSession(request)
+  await sweepStuckJobs(session.id)
   const { data, error } = await db()
     .from('jobs')
     .select(PUBLIC_JOB_COLUMNS)

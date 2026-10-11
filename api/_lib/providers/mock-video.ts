@@ -1,4 +1,5 @@
 import { OUTPUTS_BUCKET, db } from '../supabase.js'
+import { JobError } from '../errors.js'
 import type { Provider } from './types.js'
 
 const SAMPLES_DIR = 'samples'
@@ -9,12 +10,12 @@ const VIDEO_EXT = /\.(mp4|webm|mov)$/i
 export const mockVideo: Provider = {
   model: 'mock-video',
   async generate(job) {
-    if (!job.inputUrl) throw new Error('Video jobs need an input image')
+    if (!job.inputUrl) throw new JobError('invalid_input', 'Video jobs need an input image')
 
     const { data, error } = await db().storage.from(OUTPUTS_BUCKET).list(SAMPLES_DIR, { limit: 100 })
     if (error) throw error
     const clips = data.filter((f) => VIDEO_EXT.test(f.name))
-    if (clips.length === 0) throw new Error(`No sample clips in ${OUTPUTS_BUCKET}/${SAMPLES_DIR}/; upload some .mp4 files`)
+    if (clips.length === 0) throw new JobError('no_samples', `No sample clips in ${OUTPUTS_BUCKET}/${SAMPLES_DIR}/`)
 
     await new Promise((resolve) => setTimeout(resolve, 6_000 + Math.random() * 4_000))
 

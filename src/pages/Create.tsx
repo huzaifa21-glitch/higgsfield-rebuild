@@ -6,6 +6,8 @@ import { ASPECTS, requestAssist, type Aspect, type AssistResult, type Job, type 
 import CharacterPicker from '../components/characters/CharacterPicker.tsx'
 import { useCharacters } from '../lib/charactersContext.ts'
 import { useJobs } from '../lib/jobsContext.ts'
+import { describeCreateError } from '../lib/jobText.ts'
+import { useCooldown } from '../lib/useCooldown.ts'
 import type { CreatePrefill } from '../lib/prefill.ts'
 import './Create.css'
 
@@ -40,6 +42,7 @@ function AspectIcon({ aspect }: { aspect: Aspect }) {
 function Create() {
   const { jobs, credits: balance, costs, createJob } = useJobs()
   const { characters } = useCharacters()
+  const cooldown = useCooldown()
   // Remix / Use as reference from the Library arrive as router state with the exact settings to restore.
   const prefill = (useLocation().state as { prefill?: CreatePrefill } | null)?.prefill
   const [mode, setMode] = useState<Mode>(prefill?.mode ?? 'image')
@@ -107,7 +110,7 @@ function Create() {
 
   async function submit(e?: FormEvent) {
     e?.preventDefault()
-    if (!ready || !canAfford) return
+    if (!ready || !canAfford || cooldown > 0) return
     setMessage(null)
     const result = await createJob({
       type,
@@ -118,13 +121,7 @@ function Create() {
       parent_job_id: reference?.kind === 'job' ? reference.jobId : undefined,
       character_id: reference?.kind === 'character' ? reference.characterId : undefined,
     })
-    if (!result.ok) {
-      setMessage(
-        result.status === 402
-          ? `That needs ${credits(result.cost ?? 0)} and you have ${result.credits ?? 0}.`
-          : result.error,
-      )
-    }
+    if (!result.ok) setMessage(describeCreateError(result))
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -147,7 +144,11 @@ function Create() {
 
   const suggestion = assist.result
   const buttonLabel =
-    known && !canAfford ? `Need ${credits(cost)} · you have ${balance}` : `Generate · ${cost === undefined ? '…' : credits(cost)}`
+    cooldown > 0
+      ? `Slow down · try again in ${cooldown}s`
+      : known && !canAfford
+        ? `Need ${credits(cost)} · you have ${balance}`
+        : `Generate · ${cost === undefined ? '…' : credits(cost)}`
 
   return (
     <div className="create">
@@ -295,7 +296,7 @@ function Create() {
         </div>
 
         <div className="generate">
-          <button type="submit" className={`primary${known && !canAfford ? ' short' : ''}`} disabled={!ready || !canAfford}>
+          <button type="submit" className={`primary${known && !canAfford ? ' short' : ''}`} disabled={!ready || !canAfford || cooldown > 0}>
             {buttonLabel}
           </button>
           {cheaper && (

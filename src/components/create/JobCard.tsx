@@ -76,16 +76,16 @@ function JobCard({ job, onUseAsReference, onOpen }: Props) {
           ))}
 
         {job.status === 'failed' && (
-          <div className="job-failed" title={job.error ?? undefined}>
+          <div className="job-failed">
             <p>{friendlyError(job.error)}</p>
-            {job.cost > 0 && <p className="refund">Credits refunded.</p>}
+            {job.refunded !== false && job.cost > 0 && <p className="refund">Credits refunded.</p>}
           </div>
         )}
 
         {onOpen && (
           <button type="button" className="job-open" onClick={() => onOpen(job)} aria-label={`Open details: ${jobTitle(job, preset?.name)}`} />
         )}
-        {job.is_demo && loaded && <DemoBadge />}
+        {job.is_demo && loaded && <DemoBadge kind={job.type === 'video' ? 'video' : 'image'} />}
       </div>
 
       <div className="job-body">
@@ -112,6 +112,7 @@ function JobCard({ job, onUseAsReference, onOpen }: Props) {
             {job.preset_id ? 'Effect' : job.type === 'effect' ? 'Image + reference' : job.type === 'video' ? 'Video' : 'Image'} · {job.cost}{' '}
             {job.cost === 1 ? 'credit' : 'credits'}
             {took !== null && job.status === 'done' && ` · ${took.toFixed(1)}s`}
+            {job.status === 'done' && job.refunded && ' · refunded'}
           </span>
           {done && !onOpen && (
             <span className="job-actions">
